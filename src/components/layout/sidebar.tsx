@@ -105,10 +105,10 @@ export function Sidebar({
                 {/* Fixed Feed Item */}
                 <div>
                     <Link
-                        href="/community"
+                        href="/dashboard"
                         className={cn(
                             "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
-                            pathname === "/community"
+                            pathname === "/dashboard"
                                 ? "bg-white/10 text-white font-medium"
                                 : "text-gray-400 hover:text-white hover:bg-white/5"
                         )}

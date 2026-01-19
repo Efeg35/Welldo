@@ -10,7 +10,6 @@ import { UserNav } from "@/components/layout/user-nav";
 
 const navigation = [
     { href: "/dashboard", label: "Ana Sayfa" },
-    { href: "/community", label: "Topluluk" },
     { href: "/chat", label: "Sohbet" },
     { href: "/crm", label: "Üye Yönetimi" },
     { href: "/events", label: "Etkinlikler" },
@@ -37,27 +36,28 @@ export function Header() {
                         <span className="text-lg font-bold tracking-tight">WellDo</span>
                     </Link>
 
-                    {/* Navigation Links - Desktop */}
-                    <nav className="hidden md:flex items-center gap-1">
-                        {navigation.map((item) => {
-                            const isActive = pathname?.startsWith(item.href);
-                            return (
-                                <Link
-                                    key={item.href}
-                                    href={item.href}
-                                    className={cn(
-                                        "px-3 py-2 text-sm font-medium rounded-full transition-colors",
-                                        isActive
-                                            ? "bg-black text-white"
-                                            : "text-muted-foreground hover:text-foreground hover:bg-gray-100"
-                                    )}
-                                >
-                                    {item.label}
-                                </Link>
-                            );
-                        })}
-                    </nav>
                 </div>
+
+                {/* Navigation Links - Desktop (Centered) */}
+                <nav className="hidden md:flex items-center gap-1 absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+                    {navigation.map((item) => {
+                        const isActive = pathname?.startsWith(item.href);
+                        return (
+                            <Link
+                                key={item.href}
+                                href={item.href}
+                                className={cn(
+                                    "px-3 py-2 text-sm font-medium rounded-full transition-colors",
+                                    isActive
+                                        ? "bg-black text-white"
+                                        : "text-muted-foreground hover:text-foreground hover:bg-gray-100"
+                                )}
+                            >
+                                {item.label}
+                            </Link>
+                        );
+                    })}
+                </nav>
 
                 {/* Right: Actions */}
                 <div className="flex items-center gap-2">

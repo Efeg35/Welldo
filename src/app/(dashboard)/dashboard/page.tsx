@@ -1,25 +1,17 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
-    Compass,
-    Plus,
-    ChevronDown,
     MoreHorizontal,
-    Video,
-    MessageSquare,
-    ExternalLink,
-    Home,
-    X
+    MessageSquare
 } from "lucide-react";
-import Link from "next/link";
-import { formatDistanceToNow } from "date-fns";
-import { tr } from "date-fns/locale";
-import { InstructorActions } from "@/components/dashboard/instructor-actions";
+import { getPosts } from "@/actions/community";
+import { CreatePost } from "@/components/community/create-post";
+import { PostCard } from "@/components/community/post-card";
 
-export default async function DashboardPage() {
+import { FeedFilter } from "@/components/community/feed-filter";
+
+export default async function DashboardPage({ searchParams }: { searchParams: { sort?: string } }) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -27,128 +19,96 @@ export default async function DashboardPage() {
         redirect("/login");
     }
 
-    // Fetch user profile
-    const { data: profile } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .single();
+    // Capture sort param
+    const sort = searchParams?.sort || 'latest';
 
-    // Fetch community for instructor actions
+    // Fetch posts with sort
+    const posts = await getPosts(undefined, sort);
+
+    // Fetch community context for Creating Post
+    let communityId = "";
     const { data: membership } = await supabase
         .from("memberships")
-        .select("community_id, communities(slug)")
+        .select("community_id")
         .eq("user_id", user.id)
+        .limit(1)
         .single();
 
-    // Force onboarding if user has no community membership
-    // REMOVED: Students might not have membership yet.
-    // if (!membership) {
-    //    redirect("/onboarding/create-community");
-    // }
-
-    const communityId = membership?.community_id || "";
-    const communityData = membership?.communities as any;
-    const communitySlug = Array.isArray(communityData) ? communityData[0]?.slug : communityData?.slug || "community";
-
-    // Forcing instructor view for development/verification purposes
-    const isInstructor = true; // profile?.role === 'instructor' || profile?.role === 'admin';
+    if (membership) {
+        communityId = membership.community_id;
+    } else {
+        const { data: ownedCommunity } = await supabase
+            .from('communities')
+            .select('id')
+            .eq('owner_id', user.id)
+            .limit(1)
+            .single();
+        if (ownedCommunity) communityId = ownedCommunity.id;
+    }
 
     return (
-        <div className="flex flex-col h-full bg-background">
+        <div className="flex flex-col h-full bg-[#FAFAFA]"> {/* Distinct light gray background */}
+            <div className="flex-1 overflow-y-auto relative">
 
-            <div className="flex-1 p-6 overflow-y-auto">
-                <div className="max-w-4xl mx-auto space-y-8">
+                {/* Header Toolbar - Full Width Background */}
+                <div className="sticky top-0 z-10 bg-white border-b border-border shadow-sm w-full">
+                    <div className="w-full px-8 py-3 flex items-center justify-between">
+                        <h1 className="text-2xl font-bold tracking-tight text-foreground">Akış</h1>
+                        <div className="flex items-center gap-3">
+                            <FeedFilter />
 
-                    {/* Header Section */}
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-2xl font-bold tracking-tight">Hoş Geldin, {profile?.full_name?.split(' ')[0]} 👋</h1>
-                            <p className="text-muted-foreground">Topluluğunu yönetmek ve büyütmek için kontrol paneli.</p>
-                        </div>
-                        {isInstructor && (
-                            <div className="flex gap-3">
-                                <Button className="gap-2 bg-[#408FED] hover:bg-[#408FED]/90">
-                                    <Plus className="w-4 h-4" />
-                                    Yeni İçerik Oluştur
+                            <CreatePost user={user} communityId={communityId}>
+                                <Button size="sm" className="bg-[#1c1c1c] hover:bg-black text-white rounded-full px-5 font-medium shadow-sm transition-all hover:scale-105 active:scale-95 h-9">
+                                    Yeni gönderi
                                 </Button>
+                            </CreatePost>
+
+                            <Button variant="ghost" size="icon" className="text-muted-foreground hover:bg-muted/50 rounded-full h-9 w-9">
+                                <MoreHorizontal className="w-5 h-5" />
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Feed Content Area */}
+                <div className="max-w-5xl mx-auto w-full min-h-full">
+                    <div className="px-6 py-8">
+                        {posts.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in zoom-in duration-500">
+                                <div className="space-y-4 max-w-md">
+                                    <h2 className="text-3xl font-bold tracking-tight text-foreground">Topluluğuna Hoş Geldin</h2>
+                                    <p className="text-muted-foreground text-lg">
+                                        Burası ana akışın. Yeni gönderileri burada göreceksin.
+                                    </p>
+                                    <div className="pt-4">
+                                        <CreatePost user={user} communityId={communityId}>
+                                            <Button size="lg" className="bg-[#1c1c1c] hover:bg-black text-white rounded-full px-8 font-medium shadow-md transition-all hover:shadow-lg">
+                                                İlk gönderiyi oluştur
+                                            </Button>
+                                        </CreatePost>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-6 max-w-3xl mx-auto">
+                                {posts.map((post: any) => (
+                                    <PostCard
+                                        key={post.id}
+                                        post={post}
+                                        currentUserId={user?.id}
+                                    />
+                                ))}
                             </div>
                         )}
                     </div>
-
-                    {/* Quick Actions Grid */}
-                    {isInstructor ? (
-                        <InstructorActions
-                            communityId={communityId}
-                            communitySlug={communitySlug}
-                        />
-                    ) : (
-                        <div className="p-4 bg-muted/30 rounded-lg text-center text-muted-foreground text-sm border border-dashed">
-                            Üye paneline hoşgeldiniz. Henüz eğitmen yetkiniz yok.
-                        </div>
-                    )}
-
-                    {/* Getting Started / Onboarding Widgets */}
-                    <div className="bg-card border border-border rounded-xl p-6">
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center gap-2">
-                                <Compass className="w-5 h-5 text-muted-foreground" />
-                                <h2 className="font-semibold text-lg">Başlarken</h2>
-                            </div>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <X className="w-4 h-4" />
-                            </Button>
-                        </div>
-
-                        <div className="space-y-3">
-                            <div className="flex items-center gap-4 p-3 rounded-lg bg-accent/50 border border-border/50">
-                                <div className="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-xs font-bold">
-                                    ✓
-                                </div>
-                                <div className="flex-1">
-                                    <h4 className="text-sm font-medium decoration-slice">Topluluk Ayarlarını Yap</h4>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-4 p-3 rounded-lg border border-border hover:bg-accent/50 transition-colors cursor-pointer">
-                                <div className="w-8 h-8 rounded-full border-2 border-dashed border-muted-foreground/50 flex items-center justify-center text-xs text-muted-foreground">
-                                    2
-                                </div>
-                                <div className="flex-1">
-                                    <h4 className="text-sm font-medium">İlk Alanını Oluştur</h4>
-                                    <p className="text-xs text-muted-foreground">Üyelerin etkileşime gireceği bir alan yarat.</p>
-                                </div>
-                                <Button size="sm" variant="secondary">Yap</Button>
-                            </div>
-                            <div className="flex items-center gap-4 p-3 rounded-lg border border-border hover:bg-accent/50 transition-colors cursor-pointer">
-                                <div className="w-8 h-8 rounded-full border-2 border-dashed border-muted-foreground/50 flex items-center justify-center text-xs text-muted-foreground">
-                                    3
-                                </div>
-                                <div className="flex-1">
-                                    <h4 className="text-sm font-medium">İlk Gönderini Paylaş</h4>
-                                    <p className="text-xs text-muted-foreground">Topluluğuna merhaba de.</p>
-                                </div>
-                                <Button size="sm" variant="secondary">Yap</Button>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Feed Placeholder or Overview */}
-                    <div className="text-center py-12 space-y-4">
-                        <h2 className="text-2xl font-semibold">Panel Akışı</h2>
-                        <p className="text-muted-foreground">Burada topluluğunla ilgili son aktiviteleri göreceksin.</p>
-                        <Button variant="outline">
-                            Tüm Aktiviteyi Gör
-                        </Button>
-                    </div>
-
                 </div>
             </div>
 
             {/* Help Button */}
             <div className="fixed bottom-6 right-6">
-                <Button className="rounded-full h-12 px-6 shadow-lg bg-[#408FED] hover:bg-[#408FED]/90 gap-2">
-                    <MessageSquare className="w-5 h-5" />
-                    Yardım mı lazım?
+                <Button className="rounded-full shadow-lg bg-white text-foreground border border-border hover:bg-muted h-10 px-4 gap-2 transition-transform hover:-translate-y-1">
+                    <MessageSquare className="w-4 h-4 text-[#408FED]" />
+                    <span className="text-sm font-medium">Yardım lazım mı?</span>
                 </Button>
             </div>
         </div>

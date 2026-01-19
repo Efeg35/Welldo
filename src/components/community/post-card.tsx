@@ -14,6 +14,8 @@ import Link from "next/link";
 interface Post {
     id: string;
     content: string;
+    title?: string;
+    image_url?: string;
     created_at: string;
     profiles: {
         id: string;
@@ -79,10 +81,15 @@ export function PostCard({ post, currentUserId }: PostCardProps) {
             </div>
 
             <Link href={`/community/post/${post.id}`} className="block hover:bg-muted/30 transition-colors -mx-6 px-6 py-2 cursor-pointer">
-                {/* <h3 className="font-semibold text-lg mb-2">Title if posts have titles</h3> */}
+                {post.title && <h3 className="font-bold text-lg mb-2">{post.title}</h3>}
                 <p className="text-muted-foreground whitespace-pre-wrap line-clamp-4">
                     {post.content}
                 </p>
+                {post.image_url && (
+                    <div className="mt-3 rounded-lg overflow-hidden border border-border">
+                        <img src={post.image_url} alt="Post Attachment" className="w-full h-auto object-cover max-h-[500px]" />
+                    </div>
+                )}
             </Link>
 
             <div className="flex items-center gap-4 pt-2 border-t border-border">

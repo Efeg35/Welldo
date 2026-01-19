@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
-export async function getPosts(channelId?: string) {
+export async function getPosts(channelId?: string, sort: string = 'latest') {
     const supabase = await createClient();
 
     let query = supabase
@@ -20,8 +20,29 @@ export async function getPosts(channelId?: string) {
                 user_id
             ),
             comments (count)
-        `)
-        .order('created_at', { ascending: false });
+        `);
+
+    // Apply sorting
+    switch (sort) {
+        case 'oldest':
+            query = query.order('created_at', { ascending: true });
+            break;
+        case 'alphabetical':
+            // Fallback to content if title is null
+            query = query.order('title', { ascending: true, nullsFirst: false }).order('content', { ascending: true });
+            break;
+        case 'popular':
+            // Sort by likes is tricky without a computed column or view. 
+            // For now, we'll fetch latest and sort in memory (not efficient for large datasets but works for MVP)
+            // Or just order by created_at for now.
+            // Let's rely on in-memory sort for 'popular' below
+            query = query.order('created_at', { ascending: false });
+            break;
+        case 'latest':
+        default:
+            query = query.order('created_at', { ascending: false });
+            break;
+    }
 
     if (channelId) {
         query = query.eq('channel_id', channelId);
@@ -34,17 +55,29 @@ export async function getPosts(channelId?: string) {
         return [];
     }
 
-    // Transform data to match expected interface with _count
-    return data.map((post: any) => ({
+    let posts = data.map((post: any) => ({
         ...post,
         _count: {
             post_likes: post.post_likes?.length || 0,
             comments: post.comments?.[0]?.count || 0
         }
     }));
+
+    // In-memory sort for popular (since we can't easily order by relation count in standard Supabase select without RPC/View)
+    if (sort === 'popular') {
+        posts.sort((a: any, b: any) => b._count.post_likes - a._count.post_likes);
+    }
+
+    return posts;
 }
 
-export async function createPost(content: string, channelId?: string, communityId?: string) {
+export async function createPost(
+    content: string,
+    channelId?: string,
+    communityId?: string,
+    title?: string,
+    imageUrl?: string
+) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -97,6 +130,8 @@ export async function createPost(content: string, channelId?: string, communityI
         .insert({
             user_id: user.id,
             content,
+            title: title || null,
+            image_url: imageUrl || null,
             channel_id: channelId || null,
             community_id: targetCommunityId
         });
