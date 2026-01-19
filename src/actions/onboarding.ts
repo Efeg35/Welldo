@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
-export async function completeOnboarding(data: {
+export async function completeInstructorOnboarding(data: {
     communityName: string;
     communitySlug: string;
     enabledFeatures: Record<string, boolean>;
@@ -18,7 +18,24 @@ export async function completeOnboarding(data: {
     }
 
     try {
-        // 1. Create Community
+        // 1. FIRST: Update User Role to Instructor (to bypass RLS for community creation)
+        console.log("Updating role to instructor for user:", user.id);
+        const { error: profileError } = await supabase
+            .from("profiles")
+            .update({
+                role: "instructor",
+                onboarding_completed: true,
+                primary_goal: 'creating_community'
+            })
+            .eq("id", user.id);
+
+        if (profileError) {
+            console.error("Profile update failed:", profileError);
+            throw new Error("Profil güncellenemedi: " + profileError.message);
+        }
+
+        // 2. Create Community
+        console.log("Creating community with data:", data);
         const { data: community, error: communityError } = await supabase
             .from("communities")
             .insert({
@@ -36,10 +53,10 @@ export async function completeOnboarding(data: {
 
         if (communityError) {
             console.error("Community creation error:", communityError);
-            throw new Error("Community creation failed");
+            throw new Error("Topluluk oluşturulamadı: " + communityError.message);
         }
 
-        // 2. Add User as Admin Member
+        // 3. Add User as Admin Member
         const { error: memberError } = await supabase
             .from("memberships")
             .insert({
@@ -50,32 +67,9 @@ export async function completeOnboarding(data: {
 
         if (memberError) {
             console.error("Membership creation error:", memberError);
-            // Verify if trigger already handled this?
-            // If trigger handled it, this might fail on duplicate key, which is fine-ish but we should handle gracefuly.
-            // Actually, the trigger I wrote earlier creates a community automatically on signup.
-            // This wizard seems to be creating a *new* one or *updating* the existing one?
-            // The prompt says: "Senaryo: Kullanıcı ilk soruda 'Kendi topluluğumu kurmak istiyorum' seçti."
-            // And "GÖREV 4: Topluluk Oluştur".
-
-            // If the trigger already created a community (e.g. "Efe's Community"), we probably should UPDATE it instead of creating a second one.
-            // OR, we create a second one. Most platforms allow multiple communities.
-            // Let's assume for now we create a new one as requested.
         }
 
-        // 3. Update User Role to Instructor and set Onboarding Completed
-        const { error: profileError } = await supabase
-            .from("profiles")
-            .update({
-                role: "instructor",
-                onboarding_completed: true,
-                primary_goal: data.goal
-            })
-            .eq("id", user.id);
-
-        if (profileError) throw new Error("Profile update failed");
-
         // 4. Create Subscription (Starter Plan)
-        // Find Starter Plan
         const { data: plan } = await supabase
             .from("plans")
             .select("id")
@@ -94,8 +88,43 @@ export async function completeOnboarding(data: {
 
         return { success: true, slug: data.communitySlug };
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Onboarding error:", error);
+        return { success: false, error: error.message || "Bilinmeyen bir hata oluştu" };
+    }
+}
+
+export async function completeStudentOnboarding(data: {
+    interests: string[];
+}) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+        throw new Error("Unauthorized");
+    }
+
+    try {
+        // Update User Profile
+        const { error: profileError } = await supabase
+            .from("profiles")
+            .update({
+                role: "member", // Keep as member
+                onboarding_completed: true,
+                primary_goal: 'learning',
+                interests: data.interests
+            })
+            .eq("id", user.id);
+
+        if (profileError) {
+            console.error("Profile update error:", profileError);
+            throw new Error("Profile update failed");
+        }
+
+        return { success: true };
+
+    } catch (error) {
+        console.error("Student Onboarding error:", error);
         return { success: false, error: "Something went wrong" };
     }
 }

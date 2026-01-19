@@ -42,9 +42,10 @@ export default async function DashboardPage() {
         .single();
 
     // Force onboarding if user has no community membership
-    if (!membership) {
-        redirect("/onboarding/create-community");
-    }
+    // REMOVED: Students might not have membership yet.
+    // if (!membership) {
+    //    redirect("/onboarding/create-community");
+    // }
 
     const communityId = membership?.community_id || "";
     const communityData = membership?.communities as any;

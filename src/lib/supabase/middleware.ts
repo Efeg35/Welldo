@@ -66,8 +66,43 @@ export async function updateSession(request: NextRequest) {
 
     if (isAuthPath && user) {
         const url = request.nextUrl.clone();
-        url.pathname = "/";
+        url.pathname = "/dashboard"; // Redirect to dashboard instead of root
         return NextResponse.redirect(url);
+    }
+
+    // ONBOARDING CHECK
+    if (user && !request.nextUrl.pathname.startsWith('/onboarding') && !request.nextUrl.pathname.includes('/api/')) {
+        // Fetch profile to check onboarding status
+        // Note: Middleware usually shouldn't do database queries for performance, 
+        // but for critical onboarding gates it's acceptable or we use custom claims.
+        // For now we query the profile table.
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('onboarding_completed')
+            .eq('id', user.id)
+            .single();
+
+        // If onboarding is NOT completed, force redirect to /onboarding
+        if (profile && !profile.onboarding_completed) {
+            const url = request.nextUrl.clone();
+            url.pathname = "/onboarding";
+            return NextResponse.redirect(url);
+        }
+    }
+
+    // Loop Prevention: If onboarding IS completed but user tries to go to /onboarding, redirect to dashboard
+    if (user && request.nextUrl.pathname.startsWith('/onboarding')) {
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('onboarding_completed')
+            .eq('id', user.id)
+            .single();
+
+        if (profile && profile.onboarding_completed) {
+            const url = request.nextUrl.clone();
+            url.pathname = "/dashboard";
+            return NextResponse.redirect(url);
+        }
     }
 
     return supabaseResponse;

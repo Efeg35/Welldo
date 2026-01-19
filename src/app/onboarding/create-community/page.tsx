@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { completeOnboarding } from "@/actions/onboarding";
+import { completeInstructorOnboarding } from "@/actions/onboarding";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -78,7 +78,7 @@ export default function OnboardingPage() {
     const handleComplete = async () => {
         setIsLoading(true);
         try {
-            const result = await completeOnboarding({
+            const result = await completeInstructorOnboarding({
                 communityName: formData.name,
                 communitySlug: formData.slug,
                 enabledFeatures: formData.features,
@@ -88,13 +88,13 @@ export default function OnboardingPage() {
 
             if (result.success) {
                 toast.success("Topluluğunuz hazır! 🚀");
-                router.push(`/community`); // Or dashboard with slug
+                router.push(`/dashboard`); // Redirect to dashboard as requested
             } else {
                 toast.error("Bir hata oluştu.");
             }
-        } catch (error) {
-            console.error(error);
-            toast.error("Beklenmedik bir hata.");
+        } catch (error: any) {
+            console.error("Frontend HandleComplete Error:", error);
+            toast.error("Beklenmedik bir hata: " + (error.message || "Bilinmiyor"));
         } finally {
             setIsLoading(false);
         }

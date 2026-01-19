@@ -32,7 +32,7 @@ export default async function DashboardPageLayout({
             if (profile.onboarding_completed === false) {
                 // We need to import redirect from next/navigation
                 const { redirect } = await import("next/navigation");
-                redirect('/onboarding/create-community');
+                redirect('/onboarding');
             }
         }
 
