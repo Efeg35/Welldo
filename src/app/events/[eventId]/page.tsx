@@ -1,0 +1,190 @@
+import { createClient } from "@/lib/supabase/server";
+import { notFound } from "next/navigation";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import {
+    Calendar,
+    MapPin,
+    Video,
+    Users,
+    Clock,
+    ArrowLeft,
+} from "lucide-react";
+import Link from "next/link";
+import { EventActions } from "./event-actions";
+import type { Event, Community, Ticket } from "@/types";
+
+interface EventWithDetails extends Event {
+    community: Community;
+}
+
+interface EventDetailPageProps {
+    params: Promise<{ eventId: string }>;
+}
+
+export default async function EventDetailPage({
+    params,
+}: EventDetailPageProps) {
+    const { eventId } = await params;
+    const supabase = await createClient();
+
+    // Get current user
+    const {
+        data: { user },
+    } = await supabase.auth.getUser();
+
+    // Fetch event
+    const { data: event } = await supabase
+        .from("events")
+        .select(`*, community:communities(*)`)
+        .eq("id", eventId)
+        .single();
+
+    if (!event) {
+        notFound();
+    }
+
+    // Check if user has ticket
+    let ticket: Ticket | null = null;
+    if (user) {
+        const { data } = await supabase
+            .from("tickets")
+            .select("*")
+            .eq("event_id", eventId)
+            .eq("user_id", user.id)
+            .single();
+        ticket = data as Ticket | null;
+    }
+
+    const eventData = event as EventWithDetails;
+
+    const formatDate = (dateString: string) => {
+        return new Date(dateString).toLocaleDateString("tr-TR", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+        });
+    };
+
+    const formatTime = (dateString: string) => {
+        return new Date(dateString).toLocaleTimeString("tr-TR", {
+            hour: "2-digit",
+            minute: "2-digit",
+        });
+    };
+
+    const isLive =
+        new Date(eventData.start_time) <= new Date() &&
+        new Date(eventData.end_time) >= new Date();
+
+    return (
+        <div className="flex flex-col pb-24">
+            {/* Cover Image */}
+            {eventData.cover_image_url && (
+                <div className="relative aspect-video">
+                    <img
+                        src={eventData.cover_image_url}
+                        alt={eventData.title}
+                        className="h-full w-full object-cover"
+                    />
+                    <Link
+                        href="/events"
+                        className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-background/80 backdrop-blur-lg"
+                    >
+                        <ArrowLeft className="h-5 w-5" />
+                    </Link>
+                    {isLive && (
+                        <Badge className="absolute right-4 top-4 animate-pulse bg-red-500">
+                            🔴 CANLI
+                        </Badge>
+                    )}
+                </div>
+            )}
+
+            {/* Content */}
+            <div className="flex flex-col gap-6 px-4 py-6">
+                {/* Header */}
+                <div>
+                    <Badge
+                        variant={
+                            eventData.event_type === "online_zoom" ? "default" : "secondary"
+                        }
+                        className="mb-2"
+                    >
+                        {eventData.event_type === "online_zoom" ? (
+                            <>
+                                <Video className="mr-1 h-3 w-3" />
+                                Online Ders
+                            </>
+                        ) : (
+                            <>
+                                <MapPin className="mr-1 h-3 w-3" />
+                                Fiziksel Etkinlik
+                            </>
+                        )}
+                    </Badge>
+                    <h1 className="text-2xl font-bold">{eventData.title}</h1>
+                    <p className="text-sm text-muted-foreground">
+                        {eventData.community?.name}
+                    </p>
+                </div>
+
+                {/* Info Cards */}
+                <div className="grid grid-cols-2 gap-3">
+                    <div className="flex items-center gap-3 rounded-xl bg-card p-4">
+                        <Calendar className="h-5 w-5 text-violet-500" />
+                        <div>
+                            <p className="text-xs text-muted-foreground">Tarih</p>
+                            <p className="text-sm font-medium">
+                                {formatDate(eventData.start_time)}
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3 rounded-xl bg-card p-4">
+                        <Clock className="h-5 w-5 text-violet-500" />
+                        <div>
+                            <p className="text-xs text-muted-foreground">Saat</p>
+                            <p className="text-sm font-medium">
+                                {formatTime(eventData.start_time)} -{" "}
+                                {formatTime(eventData.end_time)}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Location (for physical events) */}
+                {eventData.event_type === "physical" && eventData.location_address && (
+                    <div className="flex items-start gap-3 rounded-xl bg-card p-4">
+                        <MapPin className="h-5 w-5 text-violet-500" />
+                        <div>
+                            <p className="text-xs text-muted-foreground">Konum</p>
+                            <p className="text-sm font-medium">{eventData.location_address}</p>
+                        </div>
+                    </div>
+                )}
+
+                <Separator />
+
+                {/* Description */}
+                {eventData.description && (
+                    <div>
+                        <h2 className="mb-2 font-semibold">Açıklama</h2>
+                        <p className="text-sm text-muted-foreground">
+                            {eventData.description}
+                        </p>
+                    </div>
+                )}
+            </div>
+
+            {/* Actions (Fixed Bottom) */}
+            <EventActions
+                event={eventData}
+                ticket={ticket}
+                isLive={isLive}
+                userId={user?.id}
+            />
+        </div>
+    );
+}
