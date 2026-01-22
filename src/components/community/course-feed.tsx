@@ -8,7 +8,13 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useSearchParams, useRouter } from "next/navigation";
-import { CourseBuilderOverlay } from "@/components/courses/course-builder-overlay";
+import dynamic from "next/dynamic";
+
+const CourseBuilderOverlay = dynamic(() => import("@/components/courses/course-builder-overlay").then(mod => mod.CourseBuilderOverlay), {
+    ssr: false,
+    loading: () => null
+});
+
 import {
     DropdownMenu,
     DropdownMenuContent,

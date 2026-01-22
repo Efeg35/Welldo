@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ChevronLeft, Layout, Settings, Lock, Smartphone, Users, MoreHorizontal, Workflow, CheckCircle2, HelpCircle } from "lucide-react";
+import { X, ChevronLeft, Layout, Settings, Lock, Smartphone, Users, MoreHorizontal, Workflow, CheckCircle2, HelpCircle, Eye, EyeOff, Globe, Image as ImageIcon, Plus, Info } from "lucide-react";
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
-import { updateChannelSettings } from '@/actions/community';
+import { updateChannelSettings, updateChannel } from '@/actions/community';
 import { toast } from 'sonner';
 import {
     Dialog,
@@ -21,7 +21,8 @@ import { Course, Channel } from "@/types";
 import {
     createModule, updateModule, deleteModule,
     createLesson, updateLesson, deleteLesson,
-    reorderModules, reorderLessons
+    reorderModules, reorderLessons,
+    updateCourse
 } from "@/actions/courses";
 import { Input } from "@/components/ui/input";
 import {
@@ -54,7 +55,22 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover";
+import { Switch } from "@/components/ui/switch";
+import {
+    RadioGroup,
+    RadioGroupItem
+} from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { LessonEditor } from "./lesson-editor";
+import { CustomizeTab } from "./customize-tab";
+import { createClient as createBrowserClient } from "@/lib/supabase/client";
 
 interface CourseBuilderOverlayProps {
     course: Course;
@@ -131,6 +147,7 @@ const tabs: { id: Tab; label: string; icon?: any }[] = [
     { id: 'options', label: 'Seçenekler' },
     { id: 'workflows', label: 'İş Akışları' },
 ];
+
 
 export function CourseBuilderOverlay({ course, channel, onClose }: CourseBuilderOverlayProps) {
     const [activeTab, setActiveTab] = useState<Tab>('lessons');
@@ -1006,7 +1023,15 @@ export function CourseBuilderOverlay({ course, channel, onClose }: CourseBuilder
                             </div>
                         )}
 
-                        {activeTab !== 'lessons' && (
+                        {activeTab === 'customize' && (
+                            <CustomizeTab
+                                course={course}
+                                channel={channel}
+                                onUpdate={() => router.refresh()}
+                            />
+                        )}
+
+                        {activeTab !== 'lessons' && activeTab !== 'customize' && (
                             <div className="flex items-center justify-center h-full text-muted-foreground">
                                 bu sekme yapım aşamasında: {tabs.find(t => t.id === activeTab)?.label}
                             </div>

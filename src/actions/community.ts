@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { Channel } from "@/types";
 
 export async function getPosts(channelId?: string, sort: string = 'latest') {
     const supabase = await createClient();
@@ -310,7 +311,7 @@ export async function createChannel(params: CreateChannelParams) {
             description: params.description,
             type: params.type,
             icon: params.icon || 'circle', // Default icon
-            category: params.category || 'Spaces',
+            category: params.category || 'Alanlar',
             order_index: newOrderIndex,
             access_level: params.access_level || 'open',
             settings: params.settings || {},
@@ -375,6 +376,29 @@ export async function updateChannelSettings(channelId: string, settings: any) {
     if (error) {
         console.error("Error updating channel settings:", error);
         throw new Error("Failed to update channel settings");
+    }
+
+    revalidatePath('/community');
+    return data;
+}
+export async function updateChannel(channelId: string, updates: Partial<Channel>) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+        throw new Error("Unauthorized");
+    }
+
+    const { data, error } = await supabase
+        .from('channels')
+        .update(updates)
+        .eq('id', channelId)
+        .select()
+        .single();
+
+    if (error) {
+        console.error("Error updating channel:", error);
+        throw new Error("Failed to update channel");
     }
 
     revalidatePath('/community');

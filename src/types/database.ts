@@ -42,6 +42,8 @@ export interface Channel {
     type: ChannelType;
     icon: string | null;
     is_default: boolean;
+    category: string;
+    access_level: 'open' | 'private' | 'secret';
     settings: Record<string, any> | null;
     created_at: string;
 }
@@ -143,6 +145,7 @@ export interface Course {
     thumbnail_url: string | null;
     status: 'draft' | 'published' | 'archived';
     slug: string;
+    topics: string[] | null;
     created_at: string;
     updated_at: string;
     // Joined

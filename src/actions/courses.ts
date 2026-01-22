@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { Course, CourseModule } from "@/types";
 
 export async function createCourse(
     communityId: string,
@@ -9,7 +10,7 @@ export async function createCourse(
     description: string | null,
     isPrivate: boolean,
     courseType?: string,
-    category: string = "Spaces"
+    category: string = "Alanlar"
 ) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -276,4 +277,18 @@ export async function reorderLessons(items: { id: string, order: number }[]) {
     }
 
     revalidatePath('/community');
+}
+export async function updateCourse(courseId: string, updates: Partial<Course>) {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+        .from('courses')
+        .update(updates)
+        .eq('id', courseId)
+        .select()
+        .single();
+
+    if (error) throw new Error(error.message);
+    revalidatePath('/community');
+    return data;
 }
