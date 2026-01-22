@@ -132,17 +132,45 @@ export async function createModule(courseId: string, title: string) {
     return data;
 }
 
-export async function updateModule(moduleId: string, title: string) {
+export async function updateModule(moduleId: string, title?: string, dripDelayDays?: number, releaseAt?: string | null) {
     const supabase = await createClient();
+
+    const updates: any = {};
+    if (title !== undefined) updates.title = title;
+    if (dripDelayDays !== undefined) updates.drip_delay_days = dripDelayDays;
+    if (releaseAt !== undefined) updates.release_at = releaseAt;
 
     const { data, error } = await supabase
         .from('course_modules')
-        .update({ title })
+        .update(updates)
         .eq('id', moduleId)
         .select()
         .single();
 
     if (error) throw new Error(error.message);
+    revalidatePath('/community');
+    return data;
+}
+
+export async function enrollUser(courseId: string) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) throw new Error("Unauthorized");
+
+    const { data, error } = await supabase
+        .from('user_course_enrollments')
+        .insert({
+            user_id: user.id,
+            course_id: courseId
+        })
+        .select()
+        .single();
+
+    if (error && error.code !== '23505') { // Ignore unique constraint violation (already enrolled)
+        throw new Error(error.message);
+    }
+
     revalidatePath('/community');
     return data;
 }

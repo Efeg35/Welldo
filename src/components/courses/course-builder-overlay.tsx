@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ChevronLeft, Layout, Settings, Lock, Smartphone, Users, MoreHorizontal, Workflow, CheckCircle2 } from "lucide-react";
+import { X, ChevronLeft, Layout, Settings, Lock, Smartphone, Users, MoreHorizontal, Workflow, CheckCircle2, HelpCircle } from "lucide-react";
+import { format } from "date-fns";
+import { tr } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { updateChannelSettings } from '@/actions/community';
 import { toast } from 'sonner';
@@ -45,8 +47,14 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
-    DropdownMenuTrigger
+    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
+import { LessonEditor } from "./lesson-editor";
 
 interface CourseBuilderOverlayProps {
     course: Course;
@@ -145,6 +153,9 @@ export function CourseBuilderOverlay({ course, channel, onClose }: CourseBuilder
     const [isCreatingLesson, setIsCreatingLesson] = useState(false);
     const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
     const [editLessonTitle, setEditLessonTitle] = useState("");
+    const [editingLesson, setEditingLesson] = useState<any | null>(null); // CourseLesson type import issues bypassing for now
+
+    const courseType = (channel.settings as any)?.course_type || 'self-paced';
 
     // DnD Sensors
     const sensors = useSensors(
@@ -157,6 +168,20 @@ export function CourseBuilderOverlay({ course, channel, onClose }: CourseBuilder
             coordinateGetter: sortableKeyboardCoordinates,
         })
     );
+
+    const router = useRouter();
+
+    // Prevent body scroll when open
+    useEffect(() => {
+        document.body.style.overflow = "hidden";
+        return () => {
+            document.body.style.overflow = "unset";
+        };
+    }, []);
+
+    useEffect(() => {
+        setModules(course.modules || []);
+    }, [course.modules]);
 
     const handleDragEnd = async (event: DragEndEvent) => {
         const { active, over } = event;
@@ -235,6 +260,38 @@ export function CourseBuilderOverlay({ course, channel, onClose }: CourseBuilder
         }
     };
 
+    // If editing a lesson, show the full-screen Lesson Editor
+    if (editingLesson) {
+        return (
+            <AnimatePresence>
+                <motion.div
+                    initial={{ y: "100%" }}
+                    animate={{ y: 0 }}
+                    exit={{ y: "100%" }}
+                    transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                    className="fixed inset-0 z-50 bg-white"
+                >
+                    <LessonEditor
+                        lesson={editingLesson}
+                        onBack={() => setEditingLesson(null)}
+                        onUpdate={(updatedLesson) => {
+                            // Update local state
+                            const newModules = modules.map(m => ({
+                                ...m,
+                                lessons: m.lessons?.map(l => l.id === updatedLesson.id ? updatedLesson : l)
+                            }));
+                            setModules(newModules);
+                            // Also update the specific module logic if needed, but setModules handles the overlay state
+                        }}
+                    />
+                </motion.div>
+            </AnimatePresence>
+        );
+    }
+
+
+
+
     const handleSaveCourseType = async () => {
         setIsSavingType(true);
         try {
@@ -249,11 +306,6 @@ export function CourseBuilderOverlay({ course, channel, onClose }: CourseBuilder
             setIsSavingType(false);
         }
     };
-    const router = useRouter();
-
-    useEffect(() => {
-        setModules(course.modules || []);
-    }, [course.modules]);
 
     const handleUpdateLesson = async (lessonId: string, moduleId: string, updates: any) => {
         try {
@@ -346,12 +398,20 @@ export function CourseBuilderOverlay({ course, channel, onClose }: CourseBuilder
         }
     };
 
-    const handleUpdateSection = async () => {
-        if (!editingSectionId || !editSectionTitle.trim()) return;
-
+    const handleUpdateSection = async (moduleId: string, title?: string, dripDelayDays?: number, releaseAt?: string | null) => {
         try {
-            await updateModule(editingSectionId, editSectionTitle);
-            setModules(modules.map(m => m.id === editingSectionId ? { ...m, title: editSectionTitle } : m));
+            await updateModule(moduleId, title, dripDelayDays, releaseAt);
+            setModules(modules.map(m => {
+                if (m.id === moduleId) {
+                    return {
+                        ...m,
+                        title: title !== undefined ? title : m.title,
+                        drip_delay_days: dripDelayDays !== undefined ? dripDelayDays : m.drip_delay_days,
+                        release_at: releaseAt !== undefined ? releaseAt : m.release_at
+                    };
+                }
+                return m;
+            }));
             setEditingSectionId(null);
             setEditSectionTitle("");
             toast.success("Bölüm güncellendi");
@@ -375,13 +435,7 @@ export function CourseBuilderOverlay({ course, channel, onClose }: CourseBuilder
             toast.error("Bölüm silinemedi");
         }
     };
-    // Prevent body scroll when open
-    useEffect(() => {
-        document.body.style.overflow = "hidden";
-        return () => {
-            document.body.style.overflow = "unset";
-        };
-    }, []);
+
 
     return (
         <AnimatePresence>
@@ -610,6 +664,21 @@ export function CourseBuilderOverlay({ course, channel, onClose }: CourseBuilder
                                                 )}
                                             </div>
 
+                                            {/* Column Headers */}
+                                            {(courseType === 'structured' || courseType === 'scheduled') && (
+                                                <div className="border border-transparent mb-1">
+                                                    <div className="p-4 py-0 grid grid-cols-[1fr_200px_180px_100px] items-center text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                                        <div className="pl-7 text-left">DERS ADI</div>
+                                                        <div className="text-left">{courseType === 'scheduled' ? 'ZAMANLAMA' : 'GECİKME'}</div>
+                                                        <div className="text-left flex items-center gap-1">
+                                                            E-POSTA BİLDİRİMİ
+                                                            <HelpCircle className="w-3 h-3 text-gray-400" />
+                                                        </div>
+                                                        <div></div>
+                                                    </div>
+                                                </div>
+                                            )}
+
                                             {/* Inline Add Section Form */}
                                             {isAddingSection && (
                                                 <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm mb-4 text-left">
@@ -645,7 +714,7 @@ export function CourseBuilderOverlay({ course, channel, onClose }: CourseBuilder
                                                             <SortableModuleItem key={module.id} id={module.id}>
                                                                 {(dragListeners) => (
                                                                     <div className="bg-white border text-left border-gray-200 rounded-lg overflow-hidden">
-                                                                        <div className="p-4 flex items-center justify-between bg-gray-50/50 border-b border-gray-100 group">
+                                                                        <div className="p-4 grid grid-cols-[1fr_200px_180px_100px] items-center bg-gray-50/50 border-b border-gray-100 group">
                                                                             <div className="flex items-center gap-3">
                                                                                 <div className="cursor-move text-gray-400 hover:text-gray-600 outline-none" {...dragListeners}>
                                                                                     <Layout className="w-4 h-4" />
@@ -657,48 +726,156 @@ export function CourseBuilderOverlay({ course, channel, onClose }: CourseBuilder
                                                                                             onChange={(e) => setEditSectionTitle(e.target.value)}
                                                                                             className="h-8 w-64"
                                                                                         />
-                                                                                        <Button size="sm" onClick={handleUpdateSection}>Kaydet</Button>
+                                                                                        <Button size="sm" onClick={() => handleUpdateSection(module.id, editSectionTitle)}>Kaydet</Button>
                                                                                         <Button size="sm" variant="ghost" onClick={() => setEditingSectionId(null)}>İptal</Button>
                                                                                     </div>
                                                                                 ) : (
                                                                                     <span className="font-semibold text-gray-900">{module.title}</span>
                                                                                 )}
                                                                             </div>
-                                                                            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                                <DropdownMenu>
-                                                                                    <DropdownMenuTrigger asChild>
-                                                                                        <Button size="sm" variant="outline" className="h-8 text-xs gap-1">
-                                                                                            + Yeni ekle
-                                                                                        </Button>
-                                                                                    </DropdownMenuTrigger>
-                                                                                    <DropdownMenuContent align="end">
-                                                                                        <DropdownMenuItem onClick={() => setAddingLessonToModuleId(module.id)}>
-                                                                                            Ders
-                                                                                        </DropdownMenuItem>
-                                                                                        <DropdownMenuItem disabled>
-                                                                                            Sınav (Yakında)
-                                                                                        </DropdownMenuItem>
-                                                                                    </DropdownMenuContent>
-                                                                                </DropdownMenu>
-                                                                                <DropdownMenu>
-                                                                                    <DropdownMenuTrigger asChild>
-                                                                                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
-                                                                                            <MoreHorizontal className="w-4 h-4" />
-                                                                                        </Button>
-                                                                                    </DropdownMenuTrigger>
-                                                                                    <DropdownMenuContent align="end">
-                                                                                        <DropdownMenuItem onClick={() => {
-                                                                                            setEditingSectionId(module.id);
-                                                                                            setEditSectionTitle(module.title);
-                                                                                        }}>
-                                                                                            Bölümü yeniden adlandır
-                                                                                        </DropdownMenuItem>
-                                                                                        <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteSection(module.id)}>
-                                                                                            Bölümü sil
-                                                                                        </DropdownMenuItem>
-                                                                                    </DropdownMenuContent>
-                                                                                </DropdownMenu>
-                                                                            </div>
+
+                                                                            {(courseType === 'structured' || courseType === 'scheduled') ? (
+                                                                                <>
+                                                                                    {/* Schedule/Drip Settings */}
+                                                                                    <div className="pr-4">
+                                                                                        <Popover>
+                                                                                            <PopoverTrigger asChild>
+                                                                                                <Button variant="ghost" size="sm" className="h-8 w-full justify-between font-medium border border-gray-200 bg-white shadow-sm hover:bg-gray-50 rounded-full px-4 text-xs whitespace-nowrap overflow-hidden text-ellipsis">
+                                                                                                    {courseType === 'scheduled' ? (
+                                                                                                        module.release_at ? format(new Date(module.release_at), "d MMM yyyy, HH:mm", { locale: tr }) : "Tarih seçin"
+                                                                                                    ) : (
+                                                                                                        module.drip_delay_days === 0 ? "Kayıttan hemen sonra" : `${module.drip_delay_days} gün sonra`
+                                                                                                    )}
+                                                                                                    <ChevronLeft className="w-3 h-3 rotate-270 opacity-50 ml-2" />
+                                                                                                </Button>
+                                                                                            </PopoverTrigger>
+                                                                                            <PopoverContent className="w-80 p-6" align="start">
+                                                                                                {courseType === 'scheduled' ? (
+                                                                                                    <div className="space-y-4">
+                                                                                                        <div className="space-y-1">
+                                                                                                            <h4 className="font-bold text-lg">Yayınlanma tarihi</h4>
+                                                                                                            <p className="text-xs text-gray-500">Bu bölüm seçtiğiniz tarihte otomatik olarak yayınlanacaktır.</p>
+                                                                                                        </div>
+                                                                                                        <Input
+                                                                                                            type="datetime-local"
+                                                                                                            defaultValue={module.release_at ? format(new Date(module.release_at), "yyyy-MM-dd'T'HH:mm") : ""}
+                                                                                                            onChange={(e) => {
+                                                                                                                const date = e.target.value ? new Date(e.target.value).toISOString() : null;
+                                                                                                                handleUpdateSection(module.id, undefined, undefined, date);
+                                                                                                            }}
+                                                                                                            className="h-10 border-gray-200 focus-visible:ring-gray-900"
+                                                                                                        />
+                                                                                                        <Button className="w-full bg-zinc-900 text-white rounded-lg h-10" onClick={() => { }}>Tamam</Button>
+                                                                                                    </div>
+                                                                                                ) : (
+                                                                                                    <div className="space-y-4">
+                                                                                                        <div className="space-y-1">
+                                                                                                            <h4 className="font-bold text-lg">Yayınlama gecikmesi</h4>
+                                                                                                        </div>
+                                                                                                        <div className="flex items-center gap-3">
+                                                                                                            <Input
+                                                                                                                type="number"
+                                                                                                                defaultValue={module.drip_delay_days || 0}
+                                                                                                                className="w-20"
+                                                                                                                onBlur={(e) => {
+                                                                                                                    const val = parseInt(e.target.value);
+                                                                                                                    if (val !== module.drip_delay_days) {
+                                                                                                                        handleUpdateSection(module.id, undefined, val);
+                                                                                                                    }
+                                                                                                                }}
+                                                                                                            />
+                                                                                                            <span className="text-gray-600 font-medium">gün</span>
+                                                                                                        </div>
+                                                                                                        <p className="text-sm text-gray-500 leading-relaxed">
+                                                                                                            Bu bölüm, bir öğrenci kurs alanına katıldıktan {(module.drip_delay_days || 0)} gün sonra yayınlanacaktır.
+                                                                                                        </p>
+                                                                                                        <Button className="w-full bg-zinc-900 text-white rounded-lg h-10" onClick={() => { }}>Tamam</Button>
+                                                                                                    </div>
+                                                                                                )}
+                                                                                            </PopoverContent>
+                                                                                        </Popover>
+                                                                                    </div>
+
+                                                                                    {/* Email Toggle placeholder */}
+                                                                                    <div className="flex items-center justify-start">
+                                                                                        <div className="w-10 h-5 bg-gray-200 rounded-full relative cursor-not-allowed">
+                                                                                            <div className="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow-sm" />
+                                                                                        </div>
+                                                                                    </div>
+
+                                                                                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                                        <DropdownMenu>
+                                                                                            <DropdownMenuTrigger asChild>
+                                                                                                <Button size="sm" variant="outline" className="h-8 text-xs gap-1">
+                                                                                                    + Yeni ekle
+                                                                                                </Button>
+                                                                                            </DropdownMenuTrigger>
+                                                                                            <DropdownMenuContent align="end">
+                                                                                                <DropdownMenuItem onClick={() => setAddingLessonToModuleId(module.id)}>
+                                                                                                    Ders
+                                                                                                </DropdownMenuItem>
+                                                                                                <DropdownMenuItem disabled>
+                                                                                                    Sınav (Yakında)
+                                                                                                </DropdownMenuItem>
+                                                                                            </DropdownMenuContent>
+                                                                                        </DropdownMenu>
+                                                                                        <DropdownMenu>
+                                                                                            <DropdownMenuTrigger asChild>
+                                                                                                <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
+                                                                                                    <MoreHorizontal className="w-4 h-4" />
+                                                                                                </Button>
+                                                                                            </DropdownMenuTrigger>
+                                                                                            <DropdownMenuContent align="end">
+                                                                                                <DropdownMenuItem onClick={() => {
+                                                                                                    setEditingSectionId(module.id);
+                                                                                                    setEditSectionTitle(module.title);
+                                                                                                }}>
+                                                                                                    Bölümü yeniden adlandır
+                                                                                                </DropdownMenuItem>
+                                                                                                <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteSection(module.id)}>
+                                                                                                    Bölümü sil
+                                                                                                </DropdownMenuItem>
+                                                                                            </DropdownMenuContent>
+                                                                                        </DropdownMenu>
+                                                                                    </div>
+                                                                                </>
+                                                                            ) : (
+                                                                                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity pr-4">
+                                                                                    <DropdownMenu>
+                                                                                        <DropdownMenuTrigger asChild>
+                                                                                            <Button size="sm" variant="outline" className="h-8 text-xs gap-1">
+                                                                                                + Yeni ekle
+                                                                                            </Button>
+                                                                                        </DropdownMenuTrigger>
+                                                                                        <DropdownMenuContent align="end">
+                                                                                            <DropdownMenuItem onClick={() => setAddingLessonToModuleId(module.id)}>
+                                                                                                Ders
+                                                                                            </DropdownMenuItem>
+                                                                                            <DropdownMenuItem disabled>
+                                                                                                Sınav (Yakında)
+                                                                                            </DropdownMenuItem>
+                                                                                        </DropdownMenuContent>
+                                                                                    </DropdownMenu>
+                                                                                    <DropdownMenu>
+                                                                                        <DropdownMenuTrigger asChild>
+                                                                                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
+                                                                                                <MoreHorizontal className="w-4 h-4" />
+                                                                                            </Button>
+                                                                                        </DropdownMenuTrigger>
+                                                                                        <DropdownMenuContent align="end">
+                                                                                            <DropdownMenuItem onClick={() => {
+                                                                                                setEditingSectionId(module.id);
+                                                                                                setEditSectionTitle(module.title);
+                                                                                            }}>
+                                                                                                Bölümü yeniden adlandır
+                                                                                            </DropdownMenuItem>
+                                                                                            <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteSection(module.id)}>
+                                                                                                Bölümü sil
+                                                                                            </DropdownMenuItem>
+                                                                                        </DropdownMenuContent>
+                                                                                    </DropdownMenu>
+                                                                                </div>
+                                                                            )}
                                                                         </div>
 
                                                                         {/* Add Lesson Input */}
@@ -795,8 +972,7 @@ export function CourseBuilderOverlay({ course, channel, onClose }: CourseBuilder
                                                                                                                     Yeniden adlandır
                                                                                                                 </DropdownMenuItem>
                                                                                                                 <DropdownMenuItem onClick={() => {
-                                                                                                                    // Placeholder for edit
-                                                                                                                    toast.info("Düzenleme modu yakında");
+                                                                                                                    setEditingLesson(lesson);
                                                                                                                 }}>
                                                                                                                     Dersi düzenle
                                                                                                                 </DropdownMenuItem>

@@ -156,6 +156,8 @@ export interface CourseModule {
     title: string;
     description: string | null;
     order: number;
+    drip_delay_days: number;
+    release_at: string | null;
     created_at: string;
     // Joined
     lessons?: CourseLesson[];
@@ -171,6 +173,12 @@ export interface CourseLesson {
     is_free: boolean;
     status: 'draft' | 'published';
     order: number;
+    settings: {
+        enable_featured_media: boolean;
+        enable_comments: boolean;
+        enforce_video_completion: boolean;
+        auto_advance: boolean;
+    } | null;
     created_at: string;
 }
 
