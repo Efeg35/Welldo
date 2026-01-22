@@ -16,11 +16,100 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Course, Channel } from "@/types";
+import {
+    createModule, updateModule, deleteModule,
+    createLesson, updateLesson, deleteLesson,
+    reorderModules, reorderLessons
+} from "@/actions/courses";
+import { Input } from "@/components/ui/input";
+import {
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    DragOverlay,
+    DragEndEvent
+} from '@dnd-kit/core';
+import {
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    verticalListSortingStrategy,
+    useSortable
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import React from 'react';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
 
 interface CourseBuilderOverlayProps {
     course: Course;
     channel: Channel;
     onClose: () => void;
+}
+
+// Sortable Item Components
+interface SortableItemProps {
+    id: string;
+    children: (listeners: any) => React.ReactNode;
+}
+
+function SortableModuleItem({ id, children }: SortableItemProps) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging
+    } = useSortable({ id: id, data: { type: 'module' } });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+        zIndex: isDragging ? 999 : 'auto',
+        position: 'relative' as 'relative',
+        touchAction: 'none' // Important for pointer events
+    };
+
+    return (
+        <div ref={setNodeRef} style={style} {...attributes}>
+            {children(listeners)}
+        </div>
+    );
+}
+
+function SortableLessonItem({ id, children }: SortableItemProps) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging
+    } = useSortable({ id: id, data: { type: 'lesson' } });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+        zIndex: isDragging ? 999 : 'auto',
+        position: 'relative' as 'relative',
+        touchAction: 'none'
+    };
+
+    return (
+        <div ref={setNodeRef} style={style} {...attributes}>
+            {children(listeners)}
+        </div>
+    );
 }
 
 type Tab = 'lessons' | 'customize' | 'paywalls' | 'mobile_lock' | 'members' | 'options' | 'workflows';
@@ -42,6 +131,110 @@ export function CourseBuilderOverlay({ course, channel, onClose }: CourseBuilder
     const [selectedCourseType, setSelectedCourseType] = useState((channel.settings as any)?.course_type || 'self-paced');
     const [isSavingType, setIsSavingType] = useState(false);
 
+    // Module/Section State
+    const [modules, setModules] = useState(course.modules || []);
+    const [isAddingSection, setIsAddingSection] = useState(false);
+    const [newSectionTitle, setNewSectionTitle] = useState("");
+    const [isCreatingSection, setIsCreatingSection] = useState(false);
+    const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
+    const [editSectionTitle, setEditSectionTitle] = useState("");
+
+    // Lesson State
+    const [addingLessonToModuleId, setAddingLessonToModuleId] = useState<string | null>(null);
+    const [newLessonTitle, setNewLessonTitle] = useState("");
+    const [isCreatingLesson, setIsCreatingLesson] = useState(false);
+    const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
+    const [editLessonTitle, setEditLessonTitle] = useState("");
+
+    // DnD Sensors
+    const sensors = useSensors(
+        useSensor(PointerSensor, {
+            activationConstraint: {
+                distance: 8, // Require 8px movement to start drag (allows buttons to be clicked)
+            },
+        }),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates,
+        })
+    );
+
+    const handleDragEnd = async (event: DragEndEvent) => {
+        const { active, over } = event;
+
+        if (!over || active.id === over.id) return;
+
+        const activeData = active.data.current;
+        const overData = over.data.current;
+
+        // Reordering Modules
+        if (activeData?.type === 'module' && overData?.type === 'module') {
+            const oldIndex = modules.findIndex(m => m.id === active.id);
+            const newIndex = modules.findIndex(m => m.id === over.id);
+
+            const newModules = arrayMove(modules, oldIndex, newIndex);
+
+            // Optimistic update
+            setModules(newModules);
+
+            // Create update payload
+            const updates = newModules.map((m, index) => ({
+                id: m.id,
+                order: index + 1
+            }));
+
+            try {
+                await reorderModules(updates);
+            } catch (error) {
+                console.error("Failed to reorder modules", error);
+                toast.error("Sıralama güncellenemedi");
+            }
+        }
+
+        // Reordering Lessons
+        if (activeData?.type === 'lesson') {
+            // Find module for active lesson
+            const sourceModule = modules.find(m => m.lessons?.some(l => l.id === active.id));
+            if (!sourceModule) return;
+
+            const oldIndex = sourceModule.lessons?.findIndex(l => l.id === active.id) ?? -1;
+
+            // Check if dropped over another lesson
+            let targetModule = sourceModule;
+            let newIndex = -1;
+
+            if (overData?.type === 'lesson') {
+                targetModule = modules.find(m => m.lessons?.some(l => l.id === over.id)) || sourceModule;
+                newIndex = targetModule.lessons?.findIndex(l => l.id === over.id) ?? -1;
+            }
+
+            // Only handle same module reordering for now for safety
+            if (sourceModule.id === targetModule.id && oldIndex !== -1 && newIndex !== -1) {
+                const newLessons = arrayMove(sourceModule.lessons || [], oldIndex, newIndex);
+
+                const updatedModules = modules.map(m => {
+                    if (m.id === sourceModule.id) {
+                        return { ...m, lessons: newLessons };
+                    }
+                    return m;
+                });
+
+                setModules(updatedModules);
+
+                const updates = newLessons.map((l, index) => ({
+                    id: l.id,
+                    order: index + 1
+                }));
+
+                try {
+                    await reorderLessons(updates);
+                } catch (error) {
+                    console.error(error);
+                    toast.error("Ders sıralaması güncellenemedi");
+                }
+            }
+        }
+    };
+
     const handleSaveCourseType = async () => {
         setIsSavingType(true);
         try {
@@ -58,6 +251,130 @@ export function CourseBuilderOverlay({ course, channel, onClose }: CourseBuilder
     };
     const router = useRouter();
 
+    useEffect(() => {
+        setModules(course.modules || []);
+    }, [course.modules]);
+
+    const handleUpdateLesson = async (lessonId: string, moduleId: string, updates: any) => {
+        try {
+            await updateLesson(lessonId, updates);
+            // Optimistic update
+            setModules(modules.map(m => {
+                if (m.id === moduleId && m.lessons) {
+                    return {
+                        ...m,
+                        lessons: m.lessons.map(l => l.id === lessonId ? { ...l, ...updates } : l)
+                    };
+                }
+                return m;
+            }));
+            toast.success("Ders güncellendi");
+            router.refresh();
+        } catch (error) {
+            console.error(error);
+            toast.error("Ders güncellenemedi");
+        }
+    };
+
+    const handleDeleteLesson = async (lessonId: string, moduleId: string) => {
+        if (!confirm("Bu dersi silmek istediğinize emin misiniz?")) return;
+
+        try {
+            await deleteLesson(lessonId);
+            // Optimistic update
+            setModules(modules.map(m => {
+                if (m.id === moduleId && m.lessons) {
+                    return {
+                        ...m,
+                        lessons: m.lessons.filter(l => l.id !== lessonId)
+                    };
+                }
+                return m;
+            }));
+            toast.success("Ders silindi");
+            router.refresh();
+        } catch (error) {
+            console.error(error);
+            toast.error("Ders silinemedi");
+        }
+    };
+
+    const handleCreateLesson = async (moduleId: string) => {
+        if (!newLessonTitle.trim()) return;
+
+        setIsCreatingLesson(true);
+        try {
+            const newLesson = await createLesson(moduleId, newLessonTitle);
+
+            // Optimistic update
+            const updatedModules = modules.map(m => {
+                if (m.id === moduleId) {
+                    return { ...m, lessons: [...(m.lessons || []), newLesson] };
+                }
+                return m;
+            });
+            setModules(updatedModules);
+
+            setNewLessonTitle("");
+            setAddingLessonToModuleId(null);
+            toast.success("Ders oluşturuldu");
+            router.refresh();
+        } catch (error) {
+            console.error(error);
+            toast.error("Ders oluşturulamadı");
+        } finally {
+            setIsCreatingLesson(false);
+        }
+    };
+
+    const handleAddSection = async () => {
+        if (!newSectionTitle.trim()) return;
+
+        setIsCreatingSection(true);
+        try {
+            const newModule = await createModule(course.id, newSectionTitle);
+            setModules([...modules, { ...newModule, lessons: [] }]);
+            setNewSectionTitle("");
+            setIsAddingSection(false);
+            toast.success("Bölüm eklendi");
+            router.refresh();
+        } catch (error) {
+            console.error(error);
+            toast.error("Bölüm eklenirken bir hata oluştu");
+        } finally {
+            setIsCreatingSection(false);
+        }
+    };
+
+    const handleUpdateSection = async () => {
+        if (!editingSectionId || !editSectionTitle.trim()) return;
+
+        try {
+            await updateModule(editingSectionId, editSectionTitle);
+            setModules(modules.map(m => m.id === editingSectionId ? { ...m, title: editSectionTitle } : m));
+            setEditingSectionId(null);
+            setEditSectionTitle("");
+            toast.success("Bölüm güncellendi");
+            router.refresh();
+        } catch (error) {
+            console.error(error);
+            toast.error("Bölüm güncellenemedi");
+        }
+    };
+
+    const handleDeleteSection = async (moduleId: string) => {
+        if (!confirm("Bu bölümü silmek istediğinize emin misiniz?")) return;
+
+        try {
+            await deleteModule(moduleId);
+            setModules(modules.filter(m => m.id !== moduleId));
+            toast.success("Bölüm silindi");
+            router.refresh();
+        } catch (error) {
+            console.error(error);
+            toast.error("Bölüm silinemedi");
+        }
+    };
     // Prevent body scroll when open
     useEffect(() => {
         document.body.style.overflow = "hidden";
@@ -257,17 +574,259 @@ export function CourseBuilderOverlay({ course, channel, onClose }: CourseBuilder
                                     </DialogContent>
                                 </Dialog>
 
-                                <div className="flex-1 flex items-start justify-center pt-4">
-                                    <div className="bg-white p-16 rounded-xl border border-gray-200 shadow-sm max-w-5xl w-full text-center">
-                                        <h3 className="text-2xl font-bold text-gray-900 mb-4">Kurs içeriğinizi oluşturun</h3>
-                                        <p className="text-gray-500 mb-8 max-w-lg mx-auto">
-                                            Bir kurs bölümü ekleyerek başlayın ve ardından dersleri ekleyin.
-                                        </p>
-                                        <Button size="lg" className="rounded-full bg-white text-gray-900 border border-gray-300 hover:bg-gray-50 shadow-sm px-8">
-                                            + Bölüm ekle
-                                        </Button>
+                                {modules.length === 0 && !isAddingSection && (
+                                    <div className="flex-1 flex items-start justify-center pt-4">
+                                        <div className="bg-white p-16 rounded-xl border border-gray-200 shadow-sm max-w-5xl w-full text-center">
+                                            <h3 className="text-2xl font-bold text-gray-900 mb-4">Kurs içeriğinizi oluşturun</h3>
+                                            <p className="text-gray-500 mb-8 max-w-lg mx-auto">
+                                                Bir kurs bölümü ekleyerek başlayın ve ardından dersleri ekleyin.
+                                            </p>
+                                            <Button
+                                                size="lg"
+                                                className="rounded-full bg-white text-gray-900 border border-gray-300 hover:bg-gray-50 shadow-sm px-8"
+                                                onClick={() => setIsAddingSection(true)}
+                                            >
+                                                + Bölüm ekle
+                                            </Button>
+                                        </div>
                                     </div>
-                                </div>
+                                )}
+
+                                {(modules.length > 0 || isAddingSection) && (
+                                    <div className="flex-1 overflow-y-auto">
+                                        <div className="max-w-5xl mx-auto pb-20">
+                                            {/* Header Stats & Add Button */}
+                                            <div className="flex items-center justify-between mb-4 mt-4">
+                                                <div className="font-semibold text-gray-900">
+                                                    {modules.length} bölüm • {modules.reduce((acc, m) => acc + (m.lessons?.length || 0), 0)} ders
+                                                </div>
+                                                {!isAddingSection && (
+                                                    <Button
+                                                        className="bg-gray-900 text-white hover:bg-gray-800"
+                                                        onClick={() => setIsAddingSection(true)}
+                                                    >
+                                                        + Bölüm ekle
+                                                    </Button>
+                                                )}
+                                            </div>
+
+                                            {/* Inline Add Section Form */}
+                                            {isAddingSection && (
+                                                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm mb-4 text-left">
+                                                    <div className="font-semibold text-sm text-gray-900 mb-2 uppercase">BÖLÜM BAŞLIĞI</div>
+                                                    <Input
+                                                        autoFocus
+                                                        placeholder="Örn. Giriş, Modül 1, Başlangıç..."
+                                                        value={newSectionTitle}
+                                                        onChange={(e) => setNewSectionTitle(e.target.value)}
+                                                        onKeyDown={(e) => e.key === 'Enter' && handleAddSection()}
+                                                        className="mb-4"
+                                                    />
+                                                    <div className="flex items-center gap-2">
+                                                        <Button onClick={handleAddSection} disabled={isCreatingSection} className="bg-gray-900 text-white hover:bg-gray-800">
+                                                            {isCreatingSection ? 'Ekleniyor...' : 'Bölüm ekle'}
+                                                        </Button>
+                                                        <Button variant="ghost" onClick={() => setIsAddingSection(false)}>İptal</Button>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <div className="space-y-4">
+                                                <DndContext
+                                                    sensors={sensors}
+                                                    collisionDetection={closestCenter}
+                                                    onDragEnd={handleDragEnd}
+                                                >
+                                                    <SortableContext
+                                                        items={modules.map(m => m.id)}
+                                                        strategy={verticalListSortingStrategy}
+                                                    >
+                                                        {modules.map((module) => (
+                                                            <SortableModuleItem key={module.id} id={module.id}>
+                                                                {(dragListeners) => (
+                                                                    <div className="bg-white border text-left border-gray-200 rounded-lg overflow-hidden">
+                                                                        <div className="p-4 flex items-center justify-between bg-gray-50/50 border-b border-gray-100 group">
+                                                                            <div className="flex items-center gap-3">
+                                                                                <div className="cursor-move text-gray-400 hover:text-gray-600 outline-none" {...dragListeners}>
+                                                                                    <Layout className="w-4 h-4" />
+                                                                                </div>
+                                                                                {editingSectionId === module.id ? (
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <Input
+                                                                                            value={editSectionTitle}
+                                                                                            onChange={(e) => setEditSectionTitle(e.target.value)}
+                                                                                            className="h-8 w-64"
+                                                                                        />
+                                                                                        <Button size="sm" onClick={handleUpdateSection}>Kaydet</Button>
+                                                                                        <Button size="sm" variant="ghost" onClick={() => setEditingSectionId(null)}>İptal</Button>
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <span className="font-semibold text-gray-900">{module.title}</span>
+                                                                                )}
+                                                                            </div>
+                                                                            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                                <DropdownMenu>
+                                                                                    <DropdownMenuTrigger asChild>
+                                                                                        <Button size="sm" variant="outline" className="h-8 text-xs gap-1">
+                                                                                            + Yeni ekle
+                                                                                        </Button>
+                                                                                    </DropdownMenuTrigger>
+                                                                                    <DropdownMenuContent align="end">
+                                                                                        <DropdownMenuItem onClick={() => setAddingLessonToModuleId(module.id)}>
+                                                                                            Ders
+                                                                                        </DropdownMenuItem>
+                                                                                        <DropdownMenuItem disabled>
+                                                                                            Sınav (Yakında)
+                                                                                        </DropdownMenuItem>
+                                                                                    </DropdownMenuContent>
+                                                                                </DropdownMenu>
+                                                                                <DropdownMenu>
+                                                                                    <DropdownMenuTrigger asChild>
+                                                                                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
+                                                                                            <MoreHorizontal className="w-4 h-4" />
+                                                                                        </Button>
+                                                                                    </DropdownMenuTrigger>
+                                                                                    <DropdownMenuContent align="end">
+                                                                                        <DropdownMenuItem onClick={() => {
+                                                                                            setEditingSectionId(module.id);
+                                                                                            setEditSectionTitle(module.title);
+                                                                                        }}>
+                                                                                            Bölümü yeniden adlandır
+                                                                                        </DropdownMenuItem>
+                                                                                        <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteSection(module.id)}>
+                                                                                            Bölümü sil
+                                                                                        </DropdownMenuItem>
+                                                                                    </DropdownMenuContent>
+                                                                                </DropdownMenu>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Add Lesson Input */}
+                                                                        {addingLessonToModuleId === module.id && (
+                                                                            <div className="p-4 bg-gray-50/30 border-b border-gray-100">
+                                                                                <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                                                                                    <div className="font-semibold text-xs text-gray-500 mb-2 uppercase">DERS BAŞLIĞI</div>
+                                                                                    <Input
+                                                                                        autoFocus
+                                                                                        placeholder="Örn. Ders 1: Giriş"
+                                                                                        value={newLessonTitle}
+                                                                                        onChange={(e) => setNewLessonTitle(e.target.value)}
+                                                                                        onKeyDown={(e) => e.key === 'Enter' && handleCreateLesson(module.id)}
+                                                                                        className="mb-3"
+                                                                                    />
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <Button onClick={() => handleCreateLesson(module.id)} disabled={isCreatingLesson} size="sm" className="bg-gray-900 text-white hover:bg-gray-800">
+                                                                                            {isCreatingLesson ? 'Ekleniyor...' : 'Ders ekle'}
+                                                                                        </Button>
+                                                                                        <Button variant="ghost" size="sm" onClick={() => {
+                                                                                            setAddingLessonToModuleId(null);
+                                                                                            setNewLessonTitle("");
+                                                                                        }}>İptal</Button>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+                                                                        {/* Lessons List */}
+                                                                        {module.lessons && module.lessons.length > 0 ? (
+                                                                            <div className="divide-y relative z-0">
+                                                                                <SortableContext
+                                                                                    items={module.lessons.map((l: any) => l.id)}
+                                                                                    strategy={verticalListSortingStrategy}
+                                                                                >
+                                                                                    {module.lessons.map((lesson: any) => (
+                                                                                        <SortableLessonItem key={lesson.id} id={lesson.id}>
+                                                                                            {(dragListeners) => (
+                                                                                                <div className="p-3 pl-10 flex items-center justify-between hover:bg-gray-50 flex group bg-white">
+                                                                                                    <div className="flex items-center gap-3">
+                                                                                                        <div className="cursor-move text-gray-300 outline-none" {...dragListeners}>
+                                                                                                            <Layout className="w-3 h-3" />
+                                                                                                        </div>
+                                                                                                        {editingLessonId === lesson.id ? (
+                                                                                                            <div className="flex items-center gap-2">
+                                                                                                                <Input
+                                                                                                                    value={editLessonTitle}
+                                                                                                                    onChange={(e) => setEditLessonTitle(e.target.value)}
+                                                                                                                    className="h-7 w-64 text-sm"
+                                                                                                                    autoFocus
+                                                                                                                />
+                                                                                                                <Button size="sm" className="h-7 text-xs" onClick={() => {
+                                                                                                                    handleUpdateLesson(lesson.id, module.id, { title: editLessonTitle });
+                                                                                                                    setEditingLessonId(null);
+                                                                                                                }}>Kaydet</Button>
+                                                                                                                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditingLessonId(null)}>İptal</Button>
+                                                                                                            </div>
+                                                                                                        ) : (
+                                                                                                            <span className="text-sm font-medium text-gray-700">{lesson.title}</span>
+                                                                                                        )}
+                                                                                                    </div>
+                                                                                                    <div className="flex items-center gap-2">
+                                                                                                        <DropdownMenu>
+                                                                                                            <DropdownMenuTrigger asChild>
+                                                                                                                <Button size="sm" variant="outline" className={cn(
+                                                                                                                    "h-7 text-xs px-2 border-gray-200",
+                                                                                                                    lesson.status === 'published' ? "bg-green-50 text-green-700 border-green-200 hover:bg-green-100" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                                                                                                )}>
+                                                                                                                    {lesson.status === 'published' ? 'Yayınlandı' : 'Taslak'}
+                                                                                                                </Button>
+                                                                                                            </DropdownMenuTrigger>
+                                                                                                            <DropdownMenuContent align="end">
+                                                                                                                <DropdownMenuItem onClick={() => handleUpdateLesson(lesson.id, module.id, { status: 'published' })}>
+                                                                                                                    <CheckCircle2 className={cn("w-4 h-4 mr-2", lesson.status === 'published' ? "opacity-100" : "opacity-0")} />
+                                                                                                                    Yayınlandı
+                                                                                                                </DropdownMenuItem>
+                                                                                                                <DropdownMenuItem onClick={() => handleUpdateLesson(lesson.id, module.id, { status: 'draft' })}>
+                                                                                                                    <CheckCircle2 className={cn("w-4 h-4 mr-2", lesson.status === 'draft' ? "opacity-100" : "opacity-0")} />
+                                                                                                                    Taslak
+                                                                                                                </DropdownMenuItem>
+                                                                                                            </DropdownMenuContent>
+                                                                                                        </DropdownMenu>
+
+                                                                                                        <DropdownMenu>
+                                                                                                            <DropdownMenuTrigger asChild>
+                                                                                                                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100">
+                                                                                                                    <MoreHorizontal className="w-4 h-4 text-gray-400" />
+                                                                                                                </Button>
+                                                                                                            </DropdownMenuTrigger>
+                                                                                                            <DropdownMenuContent align="end">
+                                                                                                                <DropdownMenuItem onClick={() => {
+                                                                                                                    setEditingLessonId(lesson.id);
+                                                                                                                    setEditLessonTitle(lesson.title);
+                                                                                                                }}>
+                                                                                                                    Yeniden adlandır
+                                                                                                                </DropdownMenuItem>
+                                                                                                                <DropdownMenuItem onClick={() => {
+                                                                                                                    // Placeholder for edit
+                                                                                                                    toast.info("Düzenleme modu yakında");
+                                                                                                                }}>
+                                                                                                                    Dersi düzenle
+                                                                                                                </DropdownMenuItem>
+                                                                                                                <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteLesson(lesson.id, module.id)}>
+                                                                                                                    Dersi sil
+                                                                                                                </DropdownMenuItem>
+                                                                                                            </DropdownMenuContent>
+                                                                                                        </DropdownMenu>
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            )}
+                                                                                        </SortableLessonItem>
+                                                                                    ))}
+                                                                                </SortableContext>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <div className="p-4 text-center text-sm text-gray-500 py-8">
+                                                                                Bu bölümde henüz ders yok.
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                            </SortableModuleItem>
+                                                        ))}
+                                                    </SortableContext>
+                                                </DndContext>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -279,6 +838,6 @@ export function CourseBuilderOverlay({ course, channel, onClose }: CourseBuilder
                     </div>
                 </div>
             </motion.div>
-        </AnimatePresence>
+        </AnimatePresence >
     );
 }

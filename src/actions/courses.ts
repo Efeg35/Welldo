@@ -132,6 +132,21 @@ export async function createModule(courseId: string, title: string) {
     return data;
 }
 
+export async function updateModule(moduleId: string, title: string) {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+        .from('course_modules')
+        .update({ title })
+        .eq('id', moduleId)
+        .select()
+        .single();
+
+    if (error) throw new Error(error.message);
+    revalidatePath('/community');
+    return data;
+}
+
 export async function createLesson(moduleId: string, title: string) {
     const supabase = await createClient();
 
@@ -188,5 +203,49 @@ export async function deleteLesson(lessonId: string) {
     const supabase = await createClient();
     const { error } = await supabase.from('course_lessons').delete().eq('id', lessonId);
     if (error) throw new Error(error.message);
+    revalidatePath('/community');
+}
+
+export async function reorderModules(items: { id: string, order: number }[]) {
+    const supabase = await createClient();
+
+    try {
+        await Promise.all(
+            items.map(async (item) => {
+                const { error } = await supabase
+                    .from('course_modules')
+                    .update({ order: item.order })
+                    .eq('id', item.id);
+
+                if (error) throw error;
+            })
+        );
+    } catch (error: any) {
+        console.error("Error reordering modules:", error);
+        throw new Error(error.message);
+    }
+
+    revalidatePath('/community');
+}
+
+export async function reorderLessons(items: { id: string, order: number }[]) {
+    const supabase = await createClient();
+
+    try {
+        await Promise.all(
+            items.map(async (item) => {
+                const { error } = await supabase
+                    .from('course_lessons')
+                    .update({ order: item.order })
+                    .eq('id', item.id);
+
+                if (error) throw error;
+            })
+        );
+    } catch (error: any) {
+        console.error("Error reordering lessons:", error);
+        throw new Error(error.message);
+    }
+
     revalidatePath('/community');
 }
