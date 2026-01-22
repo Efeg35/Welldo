@@ -7,7 +7,7 @@ import { PostFeed } from "@/components/community/post-feed";
 import { EventFeed } from "@/components/community/event-feed";
 import { ChatFeed } from "@/components/community/chat-feed";
 import { CourseFeed } from "@/components/community/course-feed";
-import { CourseBuilder } from "@/components/community/course-builder";
+
 import { CoursePlayer } from "@/components/community/course-player";
 import { getChannelMessages } from "@/actions/chat";
 import { getCourse } from "@/actions/courses";
@@ -58,11 +58,7 @@ export default async function ChannelPage({ params, searchParams }: { params: { 
 
     if (channel.type === 'course') {
         const course = await getCourse(channel.id);
-        const { view } = await searchParams;
 
-        if (view === 'builder' && course) {
-            return <CourseBuilder course={course} />;
-        }
 
         return <CourseFeed channel={channel} user={profile} course={course} />;
     }

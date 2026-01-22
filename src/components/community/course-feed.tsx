@@ -1,10 +1,14 @@
 "use client";
+import { useState, useEffect } from "react";
 
 import { Channel, Course, Profile } from "@/types";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, Lock, Users, Info, SquareActivity, Plus, PlayCircle, BookOpen } from "lucide-react";
+import { MoreHorizontal, Lock, Users, Info, SquareActivity, Plus, PlayCircle, BookOpen, ArrowUpRight, Link as LinkIcon, Tags, Download } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
+import { useSearchParams, useRouter } from "next/navigation";
+import { CourseBuilderOverlay } from "@/components/courses/course-builder-overlay";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -19,6 +23,32 @@ interface CourseFeedProps {
 }
 
 export function CourseFeed({ channel, user, course }: CourseFeedProps) {
+    const searchParams = useSearchParams();
+    const router = useRouter();
+    const [isMounted, setIsMounted] = useState(false);
+    const isBuilderOpen = searchParams?.get('view') === 'builder';
+
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
+    const handleCloseBuilder = () => {
+        const params = new URLSearchParams(searchParams?.toString());
+        params.delete('view');
+        router.push(`?${params.toString()}`);
+    };
+
+    const handleOpenBuilder = () => {
+        const params = new URLSearchParams(searchParams?.toString());
+        params.set('view', 'builder');
+        router.push(`?${params.toString()}`);
+    };
+
+    const handleCopyUrl = () => {
+        const url = window.location.href;
+        navigator.clipboard.writeText(url);
+        toast.success("Bağlantı kopyalandı");
+    };
 
     if (!course) {
         return (
@@ -27,6 +57,11 @@ export function CourseFeed({ channel, user, course }: CourseFeedProps) {
                 <p className="text-muted-foreground">Lütfen yönetici ile iletişime geçin.</p>
             </div>
         )
+    }
+
+    // Prevents hydration mismatch for Radix UI components (DropdownMenu)
+    if (!isMounted) {
+        return null;
     }
 
     return (
@@ -38,10 +73,64 @@ export function CourseFeed({ channel, user, course }: CourseFeedProps) {
                     <div className="mb-12">
                         <div className="flex items-center justify-between">
                             <h1 className="text-4xl font-bold tracking-tight text-gray-900 mb-4">Kurs paneli</h1>
-                            {/* Edit Button - Right aligned */}
-                            <Button className="rounded-full bg-gray-900 text-white hover:bg-gray-800" asChild>
-                                <a href={`?view=builder`}>Dersleri düzenle</a>
-                            </Button>
+                            <div className="flex items-center gap-2">
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                                            <MoreHorizontal className="h-5 w-5 text-gray-400" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-56">
+                                        <DropdownMenuItem className="cursor-pointer">
+                                            <span className="flex items-center gap-2 w-full">
+                                                Kursu görüntüle
+                                                <ArrowUpRight className="ml-auto h-4 w-4 text-gray-400" />
+                                            </span>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem className="cursor-pointer">
+                                            <span className="flex items-center gap-2 w-full">
+                                                Kilit ekranını düzenle
+                                                <ArrowUpRight className="ml-auto h-4 w-4 text-gray-400" />
+                                            </span>
+                                        </DropdownMenuItem>
+                                        <Separator className="my-1" />
+                                        <DropdownMenuItem className="cursor-pointer" onClick={handleCopyUrl}>
+                                            <span className="flex items-center gap-2">
+                                                <LinkIcon className="h-4 w-4 mr-2" />
+                                                Bağlantıyı kopyala
+                                            </span>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem className="cursor-pointer">
+                                            <span className="flex items-center gap-2">
+                                                <Tags className="h-4 w-4 mr-2" />
+                                                Etiketleri düzenle
+                                            </span>
+                                        </DropdownMenuItem>
+                                        <Separator className="my-1" />
+                                        <DropdownMenuItem className="cursor-pointer">
+                                            <span className="flex items-center gap-2">
+                                                <Download className="h-4 w-4 mr-2" />
+                                                Yorumları dışa aktar
+                                            </span>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem className="cursor-pointer">
+                                            <span className="flex items-center gap-2">
+                                                <Download className="h-4 w-4 mr-2" />
+                                                Öğrencileri dışa aktar
+                                            </span>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem className="cursor-pointer">
+                                            <span className="flex items-center gap-2">
+                                                <Download className="h-4 w-4 mr-2" />
+                                                Sınav sonuçlarını dışa aktar
+                                            </span>
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                                <Button className="rounded-full bg-gray-900 text-white hover:bg-gray-800" onClick={handleOpenBuilder}>
+                                    Dersleri düzenle
+                                </Button>
+                            </div>
                         </div>
                         <div className="flex items-center gap-4 text-gray-600">
                             <div className="flex items-center gap-2">
@@ -136,45 +225,14 @@ export function CourseFeed({ channel, user, course }: CourseFeedProps) {
                 </div>
             </div>
 
-            {/* Right Sidebar (Similar to Chat/Event layout) */}
-            <div className="w-80 flex-shrink-0 bg-white border-l border-border hidden xl:block">
-                <div className="p-6">
-                    <div className="flex items-center justify-between mb-6">
-                        <h2 className="text-lg font-bold">Detaylar</h2>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Users className="w-4 h-4" />
-                            <span>1</span>
-                        </div>
-                    </div>
-
-                    <div className="space-y-1">
-                        <div className="bg-blue-50/50 p-4 rounded-lg border border-blue-100 mb-6">
-                            <div className="flex items-center gap-3 mb-2">
-                                <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">
-                                    {user.full_name?.charAt(0) || 'U'}
-                                </div>
-                                <div>
-                                    <div className="font-semibold text-sm">{user.full_name}</div>
-                                    <div className="text-xs text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full w-fit mt-0.5 uppercase font-bold">Yönetici</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <Button variant="ghost" className="w-full justify-start text-muted-foreground hover:text-foreground h-9 px-2 gap-3 font-normal">
-                            <Lock className="w-4 h-4" />
-                            Erişim
-                        </Button>
-                        <Button variant="ghost" className="w-full justify-start text-muted-foreground hover:text-foreground h-9 px-2 gap-3 font-normal">
-                            <SquareActivity className="w-4 h-4" />
-                            İş akışları
-                        </Button>
-                        <Button variant="ghost" className="w-full justify-start text-muted-foreground hover:text-foreground h-9 px-2 gap-3 font-normal">
-                            <Info className="w-4 h-4" />
-                            Seçenekler
-                        </Button>
-                    </div>
-                </div>
-            </div>
+            {/* Builder Overlay */}
+            {isBuilderOpen && (
+                <CourseBuilderOverlay
+                    course={course}
+                    channel={channel}
+                    onClose={handleCloseBuilder}
+                />
+            )}
         </div>
     );
 }

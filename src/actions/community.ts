@@ -346,3 +346,37 @@ export async function getChannelBySlug(slug: string) {
 
     return channel;
 }
+
+export async function updateChannelSettings(channelId: string, settings: any) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+        throw new Error("Unauthorized");
+    }
+
+    const { data: currentChannel, error: fetchError } = await supabase
+        .from('channels')
+        .select('settings')
+        .eq('id', channelId)
+        .single();
+
+    if (fetchError) throw new Error(fetchError.message);
+
+    const newSettings = { ...currentChannel?.settings, ...settings };
+
+    const { data, error } = await supabase
+        .from('channels')
+        .update({ settings: newSettings })
+        .eq('id', channelId)
+        .select()
+        .single();
+
+    if (error) {
+        console.error("Error updating channel settings:", error);
+        throw new Error("Failed to update channel settings");
+    }
+
+    revalidatePath('/community');
+    return data;
+}
