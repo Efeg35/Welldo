@@ -10,25 +10,7 @@ import { useOptimistic, useState, useTransition } from "react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 
-// Define interface locally for now, or import from types
-interface Post {
-    id: string;
-    content: string;
-    title?: string;
-    image_url?: string;
-    created_at: string;
-    profiles: {
-        id: string;
-        full_name: string;
-        avatar_url: string;
-        role: string;
-    };
-    post_likes: { user_id: string }[];
-    _count?: {
-        post_likes: number;
-    };
-    comments?: { count: number }[]; // Adjusted to match supabase count return structure usually
-}
+import { Post } from "@/types";
 
 interface PostCardProps {
     post: Post;
@@ -39,8 +21,11 @@ export function PostCard({ post, currentUserId }: PostCardProps) {
     const [isPending, startTransition] = useTransition();
 
     // Check if current user has liked
-    const hasLiked = post.post_likes.some(like => like.user_id === currentUserId);
-    const initialLikeCount = post._count?.post_likes || post.post_likes.length || 0; // Fallback logic
+    // Check if current user has liked
+    const hasLiked = post.post_likes?.some((like) => like.user_id === currentUserId) || false;
+
+    // Fallback logic for like count
+    const initialLikeCount = post._count?.post_likes ?? post.post_likes?.length ?? 0;
 
     // Optimistic UI for likes
     const [optimisticState, addOptimisticState] = useOptimistic(
@@ -63,15 +48,15 @@ export function PostCard({ post, currentUserId }: PostCardProps) {
             <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
                     <Avatar className="w-10 h-10">
-                        <AvatarImage src={post.profiles.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${post.profiles.id}`} />
-                        <AvatarFallback>{post.profiles.full_name?.charAt(0) || 'U'}</AvatarFallback>
+                        <AvatarImage src={post.profiles?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${post.profiles?.id}`} />
+                        <AvatarFallback>{post.profiles?.full_name?.charAt(0) || 'U'}</AvatarFallback>
                     </Avatar>
                     <div>
                         <div className="flex items-center gap-2">
-                            <span className="font-medium">{post.profiles.full_name}</span>
+                            <span className="font-medium">{post.profiles?.full_name}</span>
                         </div>
                         <span className="text-sm text-muted-foreground">
-                            {formatDistanceToNow(new Date(post.created_at), { addSuffix: true, locale: tr })} • {post.profiles.role === 'instructor' ? 'Eğitmen' : 'Üye'}
+                            {formatDistanceToNow(new Date(post.created_at), { addSuffix: true, locale: tr })} • {post.profiles?.role === 'instructor' ? 'Eğitmen' : 'Üye'}
                         </span>
                     </div>
                 </div>

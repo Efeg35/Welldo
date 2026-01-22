@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CreateSpaceModal } from "@/components/community/create-space-modal";
+import { CreateCourseModal } from "@/components/courses/create-course-modal";
 
 interface SidebarProps {
     communityName?: string;
@@ -47,7 +48,8 @@ const iconMap: Record<string, any> = {
     'hand': Users,
     'smartphone': Smartphone,
     'globe': Globe,
-    'link': LinkIcon
+    'link': LinkIcon,
+    'book-open': BookOpen,
 };
 
 export function Sidebar({
@@ -66,6 +68,7 @@ export function Sidebar({
 }: SidebarProps) {
     const pathname = usePathname();
     const [isCreateSpaceOpen, setIsCreateSpaceOpen] = useState(false);
+    const [isCreateCourseOpen, setIsCreateCourseOpen] = useState(false);
 
     // Filter spaces based on enabledFeatures
     const filteredSpaces = spaces.filter(space => {
@@ -73,7 +76,7 @@ export function Sidebar({
         // For now, we assume spaces are always 'discussions' or custom
         // If we had a type mapping, we'd check it here.
         // Assuming 'courses' are handled elsewhere or as specific space types.
-        if (space.type === 'course' && !enabledFeatures.courses) return false;
+        if (space.type === 'course' && enabledFeatures.courses === false) return false;
         return true;
     });
 
@@ -214,6 +217,15 @@ export function Sidebar({
                 isOpen={isCreateSpaceOpen}
                 onClose={() => setIsCreateSpaceOpen(false)}
                 communityId={spaces?.[0]?.community_id || ""} // Best effort fallback
+                onSwitchToCourse={() => {
+                    setIsCreateSpaceOpen(false);
+                    setIsCreateCourseOpen(true);
+                }}
+            />
+            <CreateCourseModal
+                isOpen={isCreateCourseOpen}
+                onClose={() => setIsCreateCourseOpen(false)}
+                communityId={spaces?.[0]?.community_id || ""}
             />
         </aside>
     );

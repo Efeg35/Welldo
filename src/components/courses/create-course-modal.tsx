@@ -5,9 +5,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CheckCircle2, List, Calendar, ArrowRight, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { createCourse } from "@/actions/course";
+import { createCourse } from "@/actions/courses";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -15,7 +16,7 @@ interface CreateCourseModalProps {
     isOpen: boolean;
     onClose: () => void;
     communityId: string; // Required to link course to community
-    communitySlug: string; // Required for redirection
+    communitySlug?: string; // Not required for path anymore
 }
 
 type CourseType = 'self-paced' | 'structured' | 'scheduled';
@@ -46,6 +47,7 @@ export function CreateCourseModal({ isOpen, onClose, communityId, communitySlug 
     const [step, setStep] = useState<Step>('type-selection');
     const [selectedType, setSelectedType] = useState<CourseType | null>(null);
     const [name, setName] = useState("");
+    const [category, setCategory] = useState("Spaces");
     const [isPending, startTransition] = useTransition();
     const router = useRouter();
 
@@ -54,17 +56,14 @@ export function CreateCourseModal({ isOpen, onClose, communityId, communitySlug 
 
         startTransition(async () => {
             try {
-                const channel = await createCourse({
-                    name,
-                    courseType: selectedType,
-                    communityId
-                });
+                // communityId, name, description, isPrivate, courseType, category
+                const { channel } = await createCourse(communityId, name, null, true, selectedType, category);
 
                 toast.success("Kurs başarıyla oluşturuldu!");
                 onClose();
                 // Redirect to the new course dashboard
-                // path: /community/[communitySlug]/[channelSlug]/dashboard
-                router.push(`/community/${communitySlug}/${channel.slug}/dashboard`);
+                // path: /community/[channelSlug]
+                router.push(`/community/${channel.slug}?view=builder`);
 
                 // Reset state
                 setStep('type-selection');
@@ -83,13 +82,13 @@ export function CreateCourseModal({ isOpen, onClose, communityId, communitySlug 
             <DialogContent className="sm:max-w-xl">
                 <DialogHeader>
                     <DialogTitle>
-                        {step === 'type-selection' ? 'Kurs türünü seçin' : 'Kursunuzu isimlendirin'}
+                        {step === 'type-selection' ? 'Kurs türünü seçin' : 'Kurs alanı oluştur'}
                     </DialogTitle>
-                    <DialogDescription>
-                        {step === 'type-selection'
-                            ? 'Öğrencilerinizin içeriğe nasıl erişeceğini belirleyin.'
-                            : 'Kursunuza dikkat çekici bir isim verin.'}
-                    </DialogDescription>
+                    {step === 'type-selection' && (
+                        <DialogDescription>
+                            Öğrencilerinizin içeriğe nasıl erişeceğini belirleyin.
+                        </DialogDescription>
+                    )}
                 </DialogHeader>
 
                 <div className="py-4">
@@ -124,16 +123,42 @@ export function CreateCourseModal({ isOpen, onClose, communityId, communitySlug 
                             })}
                         </div>
                     ) : (
-                        <div className="space-y-4">
+                        <div className="space-y-6">
                             <div className="space-y-2">
-                                <Label>Kurs Adı</Label>
-                                <Input
-                                    placeholder="örn. 30 Günde React Ustası Ol"
-                                    value={name}
-                                    onChange={(e) => setName(e.target.value)}
-                                    className="h-11"
-                                    autoFocus
-                                />
+                                <Label className="text-base font-semibold">Alan adı</Label>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0 text-blue-600">
+                                        <div className="w-2.5 h-2.5 bg-current rounded-full"></div>
+                                    </div>
+                                    <Input
+                                        placeholder="Alan adı"
+                                        value={name}
+                                        onChange={(e) => setName(e.target.value)}
+                                        className="h-10"
+                                        autoFocus
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label className="text-base font-semibold">Alan grubu</Label>
+                                <Select value={category} onValueChange={setCategory}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Bir grup seç" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Spaces">Alanlar</SelectItem>
+                                        <SelectItem value="Community">Topluluk</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label className="text-base font-semibold">Kurs erişimi</Label>
+                                <p className="text-sm text-muted-foreground leading-relaxed">
+                                    Alan <strong>taslak modunda</strong> oluşturulacak ve üyelerinize görünmeyecek.
+                                    Alanı oluşturduktan sonra erişim ayarlarını güncelleyebilirsiniz.
+                                </p>
                             </div>
                         </div>
                     )}
@@ -159,10 +184,9 @@ export function CreateCourseModal({ isOpen, onClose, communityId, communitySlug 
                         {isPending ? "Oluşturuluyor..." : (
                             step === 'type-selection' ? (
                                 <>
-                                    İleri
                                     <ArrowRight className="w-4 h-4 ml-2" />
                                 </>
-                            ) : "Kursu Oluştur"
+                            ) : "Alan oluştur"
                         )}
                     </Button>
                 </DialogFooter>

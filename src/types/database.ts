@@ -3,6 +3,7 @@
 export type UserRole = "member" | "instructor" | "admin";
 export type EventType = "online_zoom" | "physical";
 export type MembershipStatus = "active" | "cancelled" | "past_due";
+export type ChannelType = "post" | "chat" | "event" | "course";
 
 export interface Profile {
     id: string;
@@ -36,8 +37,12 @@ export interface Channel {
     id: string;
     community_id: string;
     name: string;
+    slug: string;
     description: string | null;
+    type: ChannelType;
+    icon: string | null;
     is_default: boolean;
+    settings: Record<string, any> | null;
     created_at: string;
 }
 
@@ -66,6 +71,7 @@ export interface Membership {
 export interface Event {
     id: string;
     community_id: string;
+    channel_id: string;
     title: string;
     description: string | null;
     event_type: EventType;
@@ -77,11 +83,33 @@ export interface Event {
     ticket_price: number;
     max_attendees: number | null;
     cover_image_url: string | null;
+    is_paid: boolean;
+    topics: string[] | null;
     created_at: string;
     updated_at: string;
     // Joined fields
     community?: Community;
     ticket_count?: number;
+}
+
+export interface Post {
+    id: string;
+    community_id: string;
+    channel_id: string | null;
+    user_id: string;
+    title: string | null;
+    content: string;
+    image_url?: string | null; // Added based on PostCard usage and createPost action
+    media_urls: string[] | null;
+    created_at: string;
+    updated_at: string;
+    // Joined fields
+    post_likes?: { user_id: string }[];
+    _count?: { post_likes: number; comments: number };
+    comments?: { count: number }[];
+    profiles?: Profile;
+    channel?: Channel;
+    community?: Community;
 }
 
 export interface Ticket {
@@ -105,4 +133,51 @@ export interface Gamification {
     points: number;
     level: number;
     updated_at: string;
+}
+
+export interface Course {
+    id: string;
+    channel_id: string;
+    title: string;
+    description: string | null;
+    thumbnail_url: string | null;
+    status: 'draft' | 'published' | 'archived';
+    slug: string;
+    created_at: string;
+    updated_at: string;
+    // Joined
+    modules?: CourseModule[];
+    channel?: Channel;
+}
+
+export interface CourseModule {
+    id: string;
+    course_id: string;
+    title: string;
+    description: string | null;
+    order: number;
+    created_at: string;
+    // Joined
+    lessons?: CourseLesson[];
+}
+
+export interface CourseLesson {
+    id: string;
+    module_id: string;
+    title: string;
+    content: string | null;
+    video_url: string | null;
+    attachments: any[] | null; // JSONB
+    is_free: boolean;
+    status: 'draft' | 'published';
+    order: number;
+    created_at: string;
+}
+
+export interface UserCourseProgress {
+    id: string;
+    user_id: string;
+    course_id: string;
+    lesson_id: string;
+    completed_at: string;
 }

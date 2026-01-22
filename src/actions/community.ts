@@ -320,9 +320,29 @@ export async function createChannel(params: CreateChannelParams) {
 
     if (error) {
         console.error("Error creating channel:", error);
-        throw new Error("Failed to create channel");
+        throw new Error(`Failed to create channel: ${error.message} (${error.code})`);
     }
 
     revalidatePath('/community');
     return data;
+}
+
+export async function getChannelBySlug(slug: string) {
+    const supabase = await createClient();
+
+    const { data: channel, error } = await supabase
+        .from('channels')
+        .select('*')
+        .eq('slug', slug)
+        .single();
+
+    if (error) {
+        if (error.code === 'PGRST116') {
+            return null;
+        }
+        console.error(`Error fetching channel by slug '${slug}':`, JSON.stringify(error, null, 2));
+        return null;
+    }
+
+    return channel;
 }

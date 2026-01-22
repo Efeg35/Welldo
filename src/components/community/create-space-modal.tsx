@@ -29,6 +29,7 @@ interface CreateSpaceModalProps {
     isOpen: boolean;
     onClose: () => void;
     communityId: string;
+    onSwitchToCourse?: () => void;
 }
 
 type Step = 'type-selection' | 'details' | 'course-type';
@@ -43,7 +44,7 @@ const SPACE_TYPES: { type: SpaceType; label: string; icon: any; description: str
     { type: 'image', label: 'Görseller', icon: ImageIcon, description: 'Fotoğraflar ve görsel içerikler için galeri alanı.' },
 ];
 
-export function CreateSpaceModal({ isOpen, onClose, communityId }: CreateSpaceModalProps) {
+export function CreateSpaceModal({ isOpen, onClose, communityId, onSwitchToCourse }: CreateSpaceModalProps) {
     const [step, setStep] = useState<Step>('type-selection');
     const [selectedType, setSelectedType] = useState<SpaceType>('post');
     const [name, setName] = useState("");
@@ -58,9 +59,8 @@ export function CreateSpaceModal({ isOpen, onClose, communityId }: CreateSpaceMo
     const handleTypeSelect = (type: SpaceType) => {
         setSelectedType(type);
         if (type === 'course') {
-            // For now, skip course special step and go to details
-            // setStep('course-type'); 
-            setStep('details');
+            if (onClose) onClose();
+            if (onSwitchToCourse) onSwitchToCourse();
         } else {
             setStep('details');
         }

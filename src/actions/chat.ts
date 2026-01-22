@@ -167,3 +167,55 @@ export async function startConversation(otherUserId: string) {
     revalidatePath('/chat');
     return conversation.id;
 }
+
+// --- Channel Chat Actions ---
+
+export async function getChannelMessages(channelId: string) {
+    const supabase = await createClient();
+
+    const { data: messages, error } = await supabase
+        .from('messages')
+        .select(`
+            *,
+            user:profiles(*)
+        `)
+        .eq('channel_id', channelId)
+        .order('created_at', { ascending: true })
+        .limit(100);
+
+    if (error) {
+        console.error("Error fetching channel messages:", error);
+        return [];
+    }
+
+    return messages;
+}
+
+export async function sendChannelMessage(channelId: string, content: string) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) throw new Error("Unauthorized");
+    if (!content.trim()) throw new Error("Message cannot be empty");
+
+    const { error, data: message } = await supabase
+        .from('messages')
+        .insert({
+            channel_id: channelId,
+            user_id: user.id,
+            content: content.trim()
+        })
+        .select(`
+            *,
+            user:profiles(*)
+        `)
+        .single();
+
+    if (error) {
+        console.error("Error sending channel message:", error);
+        throw new Error(`Failed to send message: ${error.message}`);
+    }
+
+    revalidatePath(`/community`);
+    return message;
+}
