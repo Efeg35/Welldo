@@ -275,7 +275,7 @@ export function PayoutSettings({ currentKey }: { currentKey?: string | null }) {
                             </div>
                         )}
 
-                        <Button type="submit" disabled={isLoading}>
+                        <Button type="submit" disabled={isLoading} className="bg-gray-900 text-white hover:bg-gray-800 rounded-full px-8">
                             {isLoading ? 'Kaydediliyor...' : 'Ödeme Bilgilerini Kaydet'}
                         </Button>
                     </form>

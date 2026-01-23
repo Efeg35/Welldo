@@ -150,7 +150,7 @@ export function CoursePaywallTab({ courseId }: CoursePaywallTabProps) {
             )}
 
             <div className="flex justify-end">
-                <Button onClick={handleSave} disabled={isSaving || (isPaid && !hasMerchantKey)}>
+                <Button onClick={handleSave} disabled={isSaving || (isPaid && !hasMerchantKey)} className="bg-gray-900 text-white hover:bg-gray-800 rounded-full">
                     {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     Değişiklikleri Kaydet
                 </Button>
