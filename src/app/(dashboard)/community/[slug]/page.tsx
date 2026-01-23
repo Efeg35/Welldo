@@ -59,8 +59,58 @@ export default async function ChannelPage({ params, searchParams }: { params: { 
     if (channel.type === 'course') {
         const course = await getCourse(channel.id);
 
+        // Check if purchased
+        let isPurchased = false;
+        if (course && course.paywalls && course.paywalls.length > 0) {
+            const paywall = course.paywalls[0];
+            const { data: purchase } = await supabase
+                .from('paywall_purchases')
+                .select('id')
+                .eq('paywall_id', paywall.id)
+                .eq('user_id', user.id)
+                .single();
+            isPurchased = !!purchase;
+        } else {
+            isPurchased = true; // Free course
+        }
 
-        return <CourseFeed channel={channel} user={profile} course={course} />;
+        // Check if author
+        const isAuthor = course?.channel?.community?.owner_id === user.id; // Just a guess, need to check data shape or logic
+        // Actually, getCourse returns nested community owner?
+        // Let's rely on course.channel.community.owner_id if available.
+        // getCourse query:
+        // modules:..., channel:channels(*, community:communities(*, owner:profiles(*))) NO, query is currently:
+        /*
+          .select(`
+            *,
+            modules:course_modules(
+                *,
+                lessons:course_lessons(*)
+            ),
+            paywalls(*)
+        `)
+       */
+        // It does NOT fetch channel.community.owner.
+        // But we have profile.id (current user).
+        // We can check if profile.id is the community owner if we had community owner id.
+        // 'channel' variable (fetched via getChannelBySlug) MIGHT have owner_id if getChannelBySlug joins it.
+        // getChannelBySlug in actions/community.ts usually joins community?
+
+        // Let's check getChannelBySlug or simply Assume channel.community_id is known.
+        // We can fetch community owner separately or rely on checking if user is the instructor later.
+        // For now, let's pass isPurchased status.
+
+        // Also pass 'isAuthor' just in case.
+        // 'channel' object has community_id.
+        const { data: community } = await supabase
+            .from('communities')
+            .select('owner_id')
+            .eq('id', channel.community_id)
+            .single();
+
+        const isInstructor = community?.owner_id === user.id;
+
+        return <CourseFeed channel={channel} user={profile} course={course} isPurchased={isPurchased || isInstructor} />;
     }
 
     // Default to Post Feed (for 'post' type or others)

@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 
 import { Channel, Course, Profile } from "@/types";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, Lock, Users, Info, SquareActivity, Plus, PlayCircle, BookOpen, ArrowUpRight, Link as LinkIcon, Tags, Download } from "lucide-react";
+import { MoreHorizontal, Lock, Users, Info, SquareActivity, Plus, PlayCircle, BookOpen, ArrowUpRight, Link as LinkIcon, Tags, Download, CreditCard, Loader2, CheckCircle2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -26,17 +26,55 @@ interface CourseFeedProps {
     channel: Channel;
     user: Profile;
     course: Course | null;
+    isPurchased?: boolean;
 }
 
-export function CourseFeed({ channel, user, course }: CourseFeedProps) {
+export function CourseFeed({ channel, user, course, isPurchased = false }: CourseFeedProps) {
     const searchParams = useSearchParams();
     const router = useRouter();
     const [isMounted, setIsMounted] = useState(false);
+    const [isPurchasing, setIsPurchasing] = useState(false);
     const isBuilderOpen = searchParams?.get('view') === 'builder';
+    const paywall = course?.paywalls?.[0]; // Assuming single paywall
 
     useEffect(() => {
         setIsMounted(true);
-    }, []);
+        if (searchParams?.get('payment') === 'success') {
+            toast.success("Ödeme başarılı! Kursa hoş geldiniz.");
+            // Clean URL
+            const params = new URLSearchParams(searchParams.toString());
+            params.delete('payment');
+            router.replace(`?${params.toString()}`);
+        }
+    }, [searchParams, router]);
+
+    const handlePurchase = async () => {
+        if (!course) return;
+        setIsPurchasing(true);
+        try {
+            const response = await fetch('/api/payments/course', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ courseId: course.id }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Payment initialization failed');
+            }
+
+            if (data.paymentPageUrl) {
+                window.location.href = data.paymentPageUrl;
+            } else {
+                throw new Error('No payment URL returned');
+            }
+        } catch (error: any) {
+            toast.error(error.message || "Ödeme başlatılamadı");
+            setIsPurchasing(false);
+        }
+    };
+
 
     const handleCloseBuilder = () => {
         const params = new URLSearchParams(searchParams?.toString());
@@ -158,6 +196,7 @@ export function CourseFeed({ channel, user, course }: CourseFeedProps) {
                         </div>
                     </div>
 
+
                     {/* Stats Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
                         <div className="p-6 rounded-2xl border border-gray-100 bg-white shadow-sm flex flex-col justify-between h-32">
@@ -172,6 +211,57 @@ export function CourseFeed({ channel, user, course }: CourseFeedProps) {
                             <span className="text-4xl font-bold text-gray-900">0%</span>
                         </div>
                     </div>
+
+                    {/* Paywall Block */}
+                    {paywall && !isPurchased && (
+                        <div className="mb-12 bg-gray-900 text-white rounded-2xl p-8 shadow-xl relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+                            <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+                                <div className="space-y-4">
+                                    <h3 className="text-2xl font-bold">Bu kursa erişmek için satın alın</h3>
+                                    <p className="text-gray-300 max-w-lg">
+                                        Tam müfredata, kaynak dosyalarına ve topluluk desteğine erişim kazanın. Ömür boyu erişim dahildir.
+                                    </p>
+                                    <div className="flex items-center gap-4 text-sm text-gray-300">
+                                        <div className="flex items-center gap-1">
+                                            <CheckCircle2 className="w-4 h-4 text-green-400" />
+                                            <span>Süresiz Erişim</span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <CheckCircle2 className="w-4 h-4 text-green-400" />
+                                            <span>Sertifika</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex flex-col items-center gap-3 min-w-[200px]">
+                                    <div className="text-3xl font-bold">
+                                        {new Intl.NumberFormat('tr-TR', { style: 'currency', currency: paywall.currency }).format(paywall.price)}
+                                    </div>
+                                    <Button
+                                        size="lg"
+                                        className="w-full bg-white text-gray-900 hover:bg-gray-100 hover:scale-105 transition-transform font-bold shadow-lg"
+                                        onClick={handlePurchase}
+                                        disabled={isPurchasing}
+                                    >
+                                        {isPurchasing ? (
+                                            <>
+                                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                                İşleniyor...
+                                            </>
+                                        ) : (
+                                            <>
+                                                Hemen Satın Al
+                                            </>
+                                        )}
+                                    </Button>
+                                    <div className="text-xs text-center text-gray-400">
+                                        Güvenli ödeme - İyzico altyapısı
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
 
                     {/* Empty State / Content / Curriculum */}
                     {(course.modules && course.modules.length > 0) ? (
@@ -191,7 +281,7 @@ export function CourseFeed({ channel, user, course }: CourseFeedProps) {
                                                 className="flex items-center gap-4 p-5 hover:bg-gray-50 transition-colors group"
                                             >
                                                 <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-all duration-300">
-                                                    {lesson.status === 'published' ? <PlayCircle className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
+                                                    {lesson.status === 'published' && (isPurchased || lesson.is_free) ? <PlayCircle className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
                                                 </div>
                                                 <div className="flex-1">
                                                     <div className="font-medium text-gray-900 group-hover:text-blue-600 transition-colors text-lg">
@@ -203,8 +293,8 @@ export function CourseFeed({ channel, user, course }: CourseFeedProps) {
                                                         {lesson.is_free ? <span className="text-green-600 font-medium">✨ Ücretsiz Önizleme</span> : "Kayıtlı Üye"}
                                                     </div>
                                                 </div>
-                                                <Button size="sm" variant="outline" className="opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0">
-                                                    Başla
+                                                <Button size="sm" variant="outline" className="opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0" disabled={!isPurchased && !lesson.is_free}>
+                                                    {(!isPurchased && !lesson.is_free) ? <Lock className="w-4 h-4" /> : 'Başla'}
                                                 </Button>
                                             </a>
                                         ))}

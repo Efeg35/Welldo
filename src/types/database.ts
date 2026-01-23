@@ -151,6 +151,7 @@ export interface Course {
     // Joined
     modules?: CourseModule[];
     channel?: Channel;
+    paywalls?: Paywall[];
 }
 
 export interface CourseModule {
@@ -191,4 +192,22 @@ export interface UserCourseProgress {
     course_id: string;
     lesson_id: string;
     completed_at: string;
+}
+
+export interface Paywall {
+    id: string;
+    course_id: string;
+    currency: string;
+    price: number;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface PaywallPurchase {
+    id: string;
+    paywall_id: string | null;
+    user_id: string;
+    payment_id: string;
+    amount: number;
+    created_at: string;
 }

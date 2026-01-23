@@ -70,6 +70,7 @@ import {
 } from "@/components/ui/select";
 import { LessonEditor } from "./lesson-editor";
 import { CustomizeTab } from "./customize-tab";
+import { CoursePaywallTab } from "./course-paywall-tab";
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
 
 interface CourseBuilderOverlayProps {
@@ -136,16 +137,14 @@ function SortableLessonItem({ id, children }: SortableItemProps) {
     );
 }
 
-type Tab = 'lessons' | 'customize' | 'paywalls' | 'mobile_lock' | 'members' | 'options' | 'workflows';
+type Tab = 'lessons' | 'customize' | 'paywalls' | 'members' | 'options';
 
 const tabs: { id: Tab; label: string; icon?: any }[] = [
     { id: 'lessons', label: 'Dersler' },
     { id: 'customize', label: 'Özelleştir' },
     { id: 'paywalls', label: 'Ödeme Duvarları' },
-    { id: 'mobile_lock', label: 'Mobil kilit ekranı' },
     { id: 'members', label: 'Üyeler' },
     { id: 'options', label: 'Seçenekler' },
-    { id: 'workflows', label: 'İş Akışları' },
 ];
 
 
@@ -1031,7 +1030,11 @@ export function CourseBuilderOverlay({ course, channel, onClose }: CourseBuilder
                             />
                         )}
 
-                        {activeTab !== 'lessons' && activeTab !== 'customize' && (
+                        {activeTab === 'paywalls' && (
+                            <CoursePaywallTab courseId={course.id} />
+                        )}
+
+                        {activeTab !== 'lessons' && activeTab !== 'customize' && activeTab !== 'paywalls' && (
                             <div className="flex items-center justify-center h-full text-muted-foreground">
                                 bu sekme yapım aşamasında: {tabs.find(t => t.id === activeTab)?.label}
                             </div>

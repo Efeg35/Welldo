@@ -79,7 +79,8 @@ export async function getCourse(channelId: string) {
             modules:course_modules(
                 *,
                 lessons:course_lessons(*)
-            )
+            ),
+            paywalls(*)
         `)
         .eq('channel_id', channelId)
         .single();

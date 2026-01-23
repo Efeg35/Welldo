@@ -19,7 +19,9 @@ import {
     Smartphone,
     Globe,
     BookOpen,
-    Plus
+    Plus,
+    Settings,
+    CreditCard
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CreateSpaceModal } from "@/components/community/create-space-modal";
@@ -202,6 +204,27 @@ export function Sidebar({
                     </div>
                 )}
             </nav>
+
+            {/* Settings Section (Instructors Only) */}
+            {canCreateSpace && (
+                <div className="p-4 border-t border-border">
+                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                        Ayarlar
+                    </h3>
+                    <Link
+                        href="/dashboard/settings/payouts"
+                        className={cn(
+                            "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
+                            pathname === "/dashboard/settings/payouts"
+                                ? "bg-white/10 text-white font-medium"
+                                : "text-gray-400 hover:text-white hover:bg-white/5"
+                        )}
+                    >
+                        <CreditCard className="w-4 h-4" />
+                        Ödeme Ayarları
+                    </Link>
+                </div>
+            )}
 
             {/* Go Live Button */}
             {enabledFeatures.events && (
