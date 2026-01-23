@@ -71,6 +71,7 @@ import {
 import { LessonEditor } from "./lesson-editor";
 import { CustomizeTab } from "./customize-tab";
 import { CoursePaywallTab } from "./course-paywall-tab";
+import { CourseMembersTab } from "./course-members-tab";
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
 
 interface CourseBuilderOverlayProps {
@@ -137,14 +138,13 @@ function SortableLessonItem({ id, children }: SortableItemProps) {
     );
 }
 
-type Tab = 'lessons' | 'customize' | 'paywalls' | 'members' | 'options';
+type Tab = 'lessons' | 'customize' | 'paywalls' | 'members';
 
 const tabs: { id: Tab; label: string; icon?: any }[] = [
     { id: 'lessons', label: 'Dersler' },
     { id: 'customize', label: 'Özelleştir' },
     { id: 'paywalls', label: 'Ödeme Duvarları' },
     { id: 'members', label: 'Üyeler' },
-    { id: 'options', label: 'Seçenekler' },
 ];
 
 
@@ -165,6 +165,7 @@ export function CourseBuilderOverlay({ course, channel, onClose }: CourseBuilder
 
     // Lesson State
     const [addingLessonToModuleId, setAddingLessonToModuleId] = useState<string | null>(null);
+    const [addingLessonType, setAddingLessonType] = useState<'text' | 'quiz'>('text');
     const [newLessonTitle, setNewLessonTitle] = useState("");
     const [isCreatingLesson, setIsCreatingLesson] = useState(false);
     const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
@@ -372,7 +373,27 @@ export function CourseBuilderOverlay({ course, channel, onClose }: CourseBuilder
 
         setIsCreatingLesson(true);
         try {
+            // If type is quiz, we can optionally initialize content here or rely on the editor handling default state
+            // It's cleaner to initialize it here if we want the editor to open IN quiz mode
+            const initialContent = addingLessonType === 'quiz' ? {
+                type: 'quiz',
+                settings: { passing_grade: 70, is_enforced: true, show_answers: true },
+                questions: []
+            } : null; // Default text lesson
+
+            // Note: createLesson currently just takes title. I might need to update createLesson action 
+            // OR just update it immediately after creation? 
+            // Better: update createLesson action to accept content. 
+            // Checking existing usage of createLesson in codebase (it's imported).
+            // Assumption: createLesson(moduleId, title) is the signature.
+            // If I can't change signature easily, I can create and then update.
+
             const newLesson = await createLesson(moduleId, newLessonTitle);
+
+            if (addingLessonType === 'quiz') {
+                await updateLesson(newLesson.id, { content: initialContent });
+                newLesson.content = initialContent; // Update local optimistically
+            }
 
             // Optimistic update
             const updatedModules = modules.map(m => {
@@ -385,11 +406,11 @@ export function CourseBuilderOverlay({ course, channel, onClose }: CourseBuilder
 
             setNewLessonTitle("");
             setAddingLessonToModuleId(null);
-            toast.success("Ders oluşturuldu");
+            toast.success(addingLessonType === 'quiz' ? "Sınav oluşturuldu" : "Ders oluşturuldu");
             router.refresh();
         } catch (error) {
             console.error(error);
-            toast.error("Ders oluşturulamadı");
+            toast.error(addingLessonType === 'quiz' ? "Sınav oluşturulamadı" : "Ders oluşturulamadı");
         } finally {
             setIsCreatingLesson(false);
         }
@@ -500,6 +521,8 @@ export function CourseBuilderOverlay({ course, channel, onClose }: CourseBuilder
                 {/* Content Area */}
                 <div className="flex-1 overflow-y-auto bg-gray-50/50 p-6 md:p-10">
                     <div className="max-w-5xl mx-auto h-full">
+
+
                         {activeTab === 'lessons' && (
                             <div className="flex flex-col h-full">
                                 <div className="mb-8">
@@ -827,11 +850,17 @@ export function CourseBuilderOverlay({ course, channel, onClose }: CourseBuilder
                                                                                                 </Button>
                                                                                             </DropdownMenuTrigger>
                                                                                             <DropdownMenuContent align="end">
-                                                                                                <DropdownMenuItem onClick={() => setAddingLessonToModuleId(module.id)}>
+                                                                                                <DropdownMenuItem onClick={() => {
+                                                                                                    setAddingLessonType('text');
+                                                                                                    setAddingLessonToModuleId(module.id);
+                                                                                                }}>
                                                                                                     Ders
                                                                                                 </DropdownMenuItem>
-                                                                                                <DropdownMenuItem disabled>
-                                                                                                    Sınav (Yakında)
+                                                                                                <DropdownMenuItem onClick={() => {
+                                                                                                    setAddingLessonType('quiz');
+                                                                                                    setAddingLessonToModuleId(module.id);
+                                                                                                }}>
+                                                                                                    Sınav (Quiz)
                                                                                                 </DropdownMenuItem>
                                                                                             </DropdownMenuContent>
                                                                                         </DropdownMenu>
@@ -864,11 +893,17 @@ export function CourseBuilderOverlay({ course, channel, onClose }: CourseBuilder
                                                                                             </Button>
                                                                                         </DropdownMenuTrigger>
                                                                                         <DropdownMenuContent align="end">
-                                                                                            <DropdownMenuItem onClick={() => setAddingLessonToModuleId(module.id)}>
+                                                                                            <DropdownMenuItem onClick={() => {
+                                                                                                setAddingLessonType('text');
+                                                                                                setAddingLessonToModuleId(module.id);
+                                                                                            }}>
                                                                                                 Ders
                                                                                             </DropdownMenuItem>
-                                                                                            <DropdownMenuItem disabled>
-                                                                                                Sınav (Yakında)
+                                                                                            <DropdownMenuItem onClick={() => {
+                                                                                                setAddingLessonType('quiz');
+                                                                                                setAddingLessonToModuleId(module.id);
+                                                                                            }}>
+                                                                                                Sınav (Quiz)
                                                                                             </DropdownMenuItem>
                                                                                         </DropdownMenuContent>
                                                                                     </DropdownMenu>
@@ -898,10 +933,10 @@ export function CourseBuilderOverlay({ course, channel, onClose }: CourseBuilder
                                                                         {addingLessonToModuleId === module.id && (
                                                                             <div className="p-4 bg-gray-50/30 border-b border-gray-100">
                                                                                 <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                                                                                    <div className="font-semibold text-xs text-gray-500 mb-2 uppercase">DERS BAŞLIĞI</div>
+                                                                                    <div className="font-semibold text-xs text-gray-500 mb-2 uppercase">{addingLessonType === 'quiz' ? 'SINAV BAŞLIĞI' : 'DERS BAŞLIĞI'}</div>
                                                                                     <Input
                                                                                         autoFocus
-                                                                                        placeholder="Örn. Ders 1: Giriş"
+                                                                                        placeholder={addingLessonType === 'quiz' ? "Örn. Quiz 1: Değerlendirme" : "Örn. Ders 1: Giriş"}
                                                                                         value={newLessonTitle}
                                                                                         onChange={(e) => setNewLessonTitle(e.target.value)}
                                                                                         onKeyDown={(e) => e.key === 'Enter' && handleCreateLesson(module.id)}
@@ -909,7 +944,7 @@ export function CourseBuilderOverlay({ course, channel, onClose }: CourseBuilder
                                                                                     />
                                                                                     <div className="flex items-center gap-2">
                                                                                         <Button onClick={() => handleCreateLesson(module.id)} disabled={isCreatingLesson} size="sm" className="bg-gray-900 text-white hover:bg-gray-800">
-                                                                                            {isCreatingLesson ? 'Ekleniyor...' : 'Ders ekle'}
+                                                                                            {isCreatingLesson ? 'Ekleniyor...' : (addingLessonType === 'quiz' ? 'Sınav ekle' : 'Ders ekle')}
                                                                                         </Button>
                                                                                         <Button variant="ghost" size="sm" onClick={() => {
                                                                                             setAddingLessonToModuleId(null);
@@ -987,14 +1022,24 @@ export function CourseBuilderOverlay({ course, channel, onClose }: CourseBuilder
                                                                                                                 }}>
                                                                                                                     Yeniden adlandır
                                                                                                                 </DropdownMenuItem>
-                                                                                                                <DropdownMenuItem onClick={() => {
-                                                                                                                    setEditingLesson(lesson);
-                                                                                                                }}>
-                                                                                                                    Dersi düzenle
-                                                                                                                </DropdownMenuItem>
-                                                                                                                <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteLesson(lesson.id, module.id)}>
-                                                                                                                    Dersi sil
-                                                                                                                </DropdownMenuItem>
+                                                                                                                {(() => {
+                                                                                                                    let isQuiz = false;
+                                                                                                                    try {
+                                                                                                                        const content = typeof lesson.content === 'string' ? JSON.parse(lesson.content) : lesson.content;
+                                                                                                                        isQuiz = content && typeof content === 'object' && content.type === 'quiz';
+                                                                                                                    } catch (e) { }
+
+                                                                                                                    return (
+                                                                                                                        <>
+                                                                                                                            <DropdownMenuItem onClick={() => setEditingLesson(lesson)}>
+                                                                                                                                {isQuiz ? 'Sınavı düzenle' : 'Dersi düzenle'}
+                                                                                                                            </DropdownMenuItem>
+                                                                                                                            <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteLesson(lesson.id, module.id)}>
+                                                                                                                                {isQuiz ? 'Sınavı sil' : 'Dersi sil'}
+                                                                                                                            </DropdownMenuItem>
+                                                                                                                        </>
+                                                                                                                    );
+                                                                                                                })()}
                                                                                                             </DropdownMenuContent>
                                                                                                         </DropdownMenu>
                                                                                                     </div>
@@ -1034,11 +1079,11 @@ export function CourseBuilderOverlay({ course, channel, onClose }: CourseBuilder
                             <CoursePaywallTab courseId={course.id} />
                         )}
 
-                        {activeTab !== 'lessons' && activeTab !== 'customize' && activeTab !== 'paywalls' && (
-                            <div className="flex items-center justify-center h-full text-muted-foreground">
-                                bu sekme yapım aşamasında: {tabs.find(t => t.id === activeTab)?.label}
-                            </div>
+                        {activeTab === 'members' && (
+                            <CourseMembersTab courseId={course.id} />
                         )}
+
+
                     </div>
                 </div>
             </motion.div>

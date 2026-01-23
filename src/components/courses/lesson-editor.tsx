@@ -11,6 +11,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { updateLesson } from "@/actions/courses";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { QuizContent, QuizSettings } from "@/types";
+import { QuizBuilder } from "./quiz-builder";
+import { BookOpen, ListChecks } from "lucide-react";
 import { CourseLesson } from "@/types/database";
 import { createClient } from "@/lib/supabase/client";
 
@@ -38,19 +41,46 @@ export function LessonEditor({ lesson, onBack, onUpdate }: LessonEditorProps) {
         enable_featured_media: lesson.settings?.enable_featured_media ?? true,
         enable_comments: lesson.settings?.enable_comments ?? true,
         enforce_video_completion: lesson.settings?.enforce_video_completion ?? false,
-        auto_advance: lesson.settings?.auto_advance ?? false
+        auto_advance: lesson.settings?.auto_advance ?? false,
+        default_tab: (lesson.settings?.default_tab as 'comments' | 'curriculum' | 'files') ?? 'curriculum'
     });
 
     const [isSaving, setIsSaving] = useState(false);
     const [activeSidebarTab, setActiveSidebarTab] = useState("general");
     const [mediaTab, setMediaTab] = useState<'upload' | 'embed'>('embed');
 
+    // Quiz State
+    let parsedContent: any = lesson.content;
+    try {
+        if (typeof lesson.content === 'string') {
+            const parsed = JSON.parse(lesson.content);
+            if (parsed && typeof parsed === 'object') {
+                parsedContent = parsed;
+            }
+        }
+    } catch (e) {
+        // Not a JSON string, assume text content
+    }
+
+    const isInitialQuiz = parsedContent && typeof parsedContent === 'object' && parsedContent.type === 'quiz';
+    const [lessonType, setLessonType] = useState<'text' | 'quiz'>(isInitialQuiz ? 'quiz' : 'text');
+
+    const [quizContent, setQuizContent] = useState<QuizContent>(
+        isInitialQuiz
+            ? (parsedContent as QuizContent)
+            : {
+                type: 'quiz',
+                settings: { passing_grade: 70, is_enforced: true, show_answers: true },
+                questions: []
+            }
+    );
+
     const handleSave = async () => {
         setIsSaving(true);
         try {
             const updatedData = {
                 title,
-                content,
+                content: lessonType === 'quiz' ? quizContent : content,
                 status,
                 video_url: videoUrl,
                 settings,
@@ -61,6 +91,7 @@ export function LessonEditor({ lesson, onBack, onUpdate }: LessonEditorProps) {
             onUpdate({ ...lesson, ...updatedData });
             toast.success("Ders kaydedildi");
         } catch (error) {
+            console.error(error);
             toast.error("Kaydedilirken bir hata oluştu");
         } finally {
             setIsSaving(false);
@@ -189,8 +220,80 @@ export function LessonEditor({ lesson, onBack, onUpdate }: LessonEditorProps) {
                     {/* Main Sidebar Content */}
                     {activeSidebarTab === "general" ? (
                         <div className="space-y-8">
-                            {/* Status */}
                             <div className="space-y-4">
+                                <h3 className="text-sm font-semibold text-gray-900">Ayarlar</h3>
+
+
+
+                                {lessonType === 'quiz' && (
+                                    <div className="p-4 bg-indigo-50/50 rounded-lg border border-indigo-100 space-y-4 animate-in slide-in-from-top-2">
+                                        <div className="space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <Label className="text-indigo-900 text-xs font-bold uppercase">Geçme Notu</Label>
+                                                <span className="text-xs font-medium text-indigo-600">% {quizContent.settings.passing_grade}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Input
+                                                    type="number"
+                                                    min={0} max={100}
+                                                    value={quizContent.settings.passing_grade}
+                                                    onChange={(e) => setQuizContent({
+                                                        ...quizContent,
+                                                        settings: { ...quizContent.settings, passing_grade: parseInt(e.target.value) || 0 }
+                                                    })}
+                                                    className="h-8 bg-white"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <Separator className="bg-indigo-200/50" />
+
+                                        <div className="space-y-3">
+                                            <div className="flex items-start gap-2">
+                                                <Checkbox
+                                                    id="enforce_passing"
+                                                    checked={quizContent.settings.is_enforced}
+                                                    onCheckedChange={(c) => setQuizContent({
+                                                        ...quizContent,
+                                                        settings: { ...quizContent.settings, is_enforced: !!c }
+                                                    })}
+                                                    className="mt-0.5 border-indigo-300 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600"
+                                                />
+                                                <div className="grid gap-0.5">
+                                                    <Label htmlFor="enforce_passing" className="text-sm font-medium text-gray-900 leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                                                        İlerleme Kilidi
+                                                    </Label>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        Öğrenci bu puanı alamazsa sonraki derse geçemez.
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-start gap-2">
+                                                <Checkbox
+                                                    id="show_answers"
+                                                    checked={quizContent.settings.show_answers}
+                                                    onCheckedChange={(c) => setQuizContent({
+                                                        ...quizContent,
+                                                        settings: { ...quizContent.settings, show_answers: !!c }
+                                                    })}
+                                                    className="mt-0.5 border-indigo-300 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600"
+                                                />
+                                                <div className="grid gap-0.5">
+                                                    <Label htmlFor="show_answers" className="text-sm font-medium text-gray-900 leading-none">
+                                                        Cevapları Göster
+                                                    </Label>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        Sonuç ekranında doğru cevapları göster.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <Separator />
+
                                 <h3 className="text-sm font-semibold text-gray-900">Durum</h3>
                                 <RadioGroup value={status} onValueChange={(v: 'draft' | 'published') => setStatus(v)}>
                                     <div className="flex items-center space-x-2">
@@ -252,18 +355,21 @@ export function LessonEditor({ lesson, onBack, onUpdate }: LessonEditorProps) {
                             {/* Default Tab */}
                             <div className="space-y-4">
                                 <h3 className="text-sm font-semibold text-gray-900">Varsayılan sekme</h3>
-                                <RadioGroup defaultValue="curriculum">
+                                <RadioGroup
+                                    value={settings.default_tab}
+                                    onValueChange={(v) => setSettings({ ...settings, default_tab: v as 'comments' | 'curriculum' | 'files' })}
+                                >
                                     <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="comments" id="tab_comments" disabled />
-                                        <Label htmlFor="tab_comments" className="text-gray-400">Yorumlar</Label>
+                                        <RadioGroupItem value="comments" id="tab_comments" />
+                                        <Label htmlFor="tab_comments" className="text-gray-700">Yorumlar</Label>
                                     </div>
                                     <div className="flex items-center space-x-2">
                                         <RadioGroupItem value="curriculum" id="tab_curriculum" />
                                         <Label htmlFor="tab_curriculum" className="text-gray-700">Müfredat</Label>
                                     </div>
                                     <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="files" id="tab_files" disabled />
-                                        <Label htmlFor="tab_files" className="text-gray-400">Dosyalar</Label>
+                                        <RadioGroupItem value="files" id="tab_files" />
+                                        <Label htmlFor="tab_files" className="text-gray-700">Dosyalar</Label>
                                     </div>
                                 </RadioGroup>
                             </div>
@@ -344,7 +450,8 @@ export function LessonEditor({ lesson, onBack, onUpdate }: LessonEditorProps) {
                 <div className="flex-1 overflow-y-auto p-12 max-w-4xl mx-auto w-full">
                     {/* Breadcrumb-ish */}
                     <div className="text-sm text-gray-500 mb-6 flex items-center gap-2">
-                        Ders 1 / 1
+                        {lessonType === 'quiz' ? <ListChecks className="w-4 h-4 text-indigo-500" /> : <BookOpen className="w-4 h-4 text-blue-500" />}
+                        {lessonType === 'quiz' ? 'Sınav (Quiz)' : 'Ders İçeriği'}
                         <ChevronRight className="w-4 h-4" />
                     </div>
 
@@ -353,52 +460,64 @@ export function LessonEditor({ lesson, onBack, onUpdate }: LessonEditorProps) {
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
                         className="text-3xl font-bold border-none px-0 shadow-none focus-visible:ring-0 placeholder:text-gray-300 mb-8 h-auto"
-                        placeholder="Ders başlığı..."
+                        placeholder={lessonType === 'quiz' ? "Sınav başlığı..." : "Ders başlığı..."}
                     />
 
-                    {/* Featured Media Block */}
-                    {settings.enable_featured_media && (
-                        <div className="mb-8">
-                            {!videoUrl ? (
-                                <div className="border border-dashed border-gray-300 rounded-xl p-12 flex flex-col items-center justify-center bg-gray-50/50 text-center">
-                                    <div className="flex items-center gap-2 mb-4 text-gray-400">
-                                        <PlayCircle className="w-8 h-8" />
-                                    </div>
-                                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Öne çıkan medya</h3>
-                                    <p className="text-sm text-gray-500 mb-6 max-w-sm mx-auto">
-                                        Videonuzu/ses dosyanızı sürükleyin veya Vimeo, YouTube, Wistia, Typeform ve daha fazlasını gömün.
-                                    </p>
-                                    <Button variant="outline" onClick={() => setIsMediaModalOpen(true)} className="bg-white">
-                                        Medya yükle veya göm
-                                    </Button>
-                                </div>
-                            ) : (
-                                <div className="relative group rounded-xl overflow-hidden border border-gray-200 bg-gray-900 aspect-video flex items-center justify-center">
-                                    {/* Simple Embed Preview */}
-                                    <div className="text-white text-center">
-                                        <PlayCircle className="w-12 h-12 mx-auto mb-4 opacity-80" />
-                                        <p className="text-sm text-gray-300 max-w-md truncate px-4">{videoUrl}</p>
-                                    </div>
+                    {lessonType === 'text' ? (
+                        <>
+                            {/* Featured Media Block */}
+                            {settings.enable_featured_media && (
+                                <div className="mb-8">
+                                    {!videoUrl ? (
+                                        <div className="border border-dashed border-gray-300 rounded-xl p-12 flex flex-col items-center justify-center bg-gray-50/50 text-center">
+                                            <div className="flex items-center gap-2 mb-4 text-gray-400">
+                                                <PlayCircle className="w-8 h-8" />
+                                            </div>
+                                            <h3 className="text-lg font-semibold text-gray-900 mb-2">Öne çıkan medya</h3>
+                                            <p className="text-sm text-gray-500 mb-6 max-w-sm mx-auto">
+                                                Videonuzu/ses dosyanızı sürükleyin veya Vimeo, YouTube, Wistia, Typeform ve daha fazlasını gömün.
+                                            </p>
+                                            <Button variant="outline" onClick={() => setIsMediaModalOpen(true)} className="bg-white">
+                                                Medya yükle veya göm
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <div className="relative group rounded-xl overflow-hidden border border-gray-200 bg-gray-900 aspect-video flex items-center justify-center">
+                                            {/* Simple Embed Preview */}
+                                            <div className="text-white text-center">
+                                                <PlayCircle className="w-12 h-12 mx-auto mb-4 opacity-80" />
+                                                <p className="text-sm text-gray-300 max-w-md truncate px-4">{videoUrl}</p>
+                                            </div>
 
-                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
-                                        <Button variant="secondary" onClick={() => setIsMediaModalOpen(true)}>Değiştir</Button>
-                                        <Button variant="destructive" onClick={() => setVideoUrl("")}>Kaldır</Button>
-                                    </div>
+                                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
+                                                <Button variant="secondary" onClick={() => setIsMediaModalOpen(true)}>Değiştir</Button>
+                                                <Button variant="destructive" onClick={() => setVideoUrl("")}>Kaldır</Button>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             )}
+
+                            {/* Editor Placeholder */}
+                            <div className="min-h-[200px] text-gray-500">
+                                <p className="mb-2 text-sm text-gray-400">Komutlar için '/' yazmaya başlayın</p>
+                                <Textarea
+                                    value={content as string}
+                                    onChange={(e) => setContent(e.target.value)}
+                                    placeholder="İçeriğinizi buraya yazın..."
+                                    className="min-h-[300px] border-none focus-visible:ring-0 px-0 resize-none text-lg leading-relaxed"
+                                />
+                            </div>
+                        </>
+                    ) : (
+                        // QUIZ MODE
+                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            <QuizBuilder
+                                quiz={quizContent}
+                                onChange={setQuizContent}
+                            />
                         </div>
                     )}
-
-                    {/* Editor Placeholder */}
-                    <div className="min-h-[200px] text-gray-500">
-                        <p className="mb-2 text-sm text-gray-400">Komutlar için '/' yazmaya başlayın</p>
-                        <Textarea
-                            value={content}
-                            onChange={(e) => setContent(e.target.value)}
-                            placeholder="İçeriğinizi buraya yazın..."
-                            className="min-h-[300px] border-none focus-visible:ring-0 px-0 resize-none text-lg leading-relaxed"
-                        />
-                    </div>
                 </div>
             </div>
 

@@ -60,6 +60,16 @@ export async function POST(request: NextRequest) {
         if (purchase) {
             const courseId = (purchase.paywall as any)?.course_id;
             if (courseId) {
+                // 3. Create Enrollment record to grant access
+                await supabase
+                    .from('user_course_enrollments')
+                    .insert({
+                        user_id: purchase.user_id,
+                        course_id: courseId,
+                        status: 'active'
+                    })
+                    .select();
+
                 return NextResponse.redirect(
                     new URL(`/courses/${courseId}?payment=success`, request.url)
                 );

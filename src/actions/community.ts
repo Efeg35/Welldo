@@ -404,3 +404,25 @@ export async function updateChannel(channelId: string, updates: Partial<Channel>
     revalidatePath('/community');
     return data;
 }
+
+export async function deleteChannel(channelId: string) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+        throw new Error("Unauthorized");
+    }
+
+    const { error } = await supabase
+        .from('channels')
+        .delete()
+        .eq('id', channelId);
+
+    if (error) {
+        console.error("Error deleting channel:", error);
+        throw new Error("Failed to delete channel");
+    }
+
+    revalidatePath('/community');
+    return { success: true };
+}

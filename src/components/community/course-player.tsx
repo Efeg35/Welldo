@@ -7,6 +7,8 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { Separator } from "@/components/ui/separator";
+import { QuizContent } from "@/types";
+import { QuizPlayer } from "./quiz-player";
 
 interface CoursePlayerProps {
     course: Course;
@@ -103,63 +105,78 @@ export function CoursePlayer({ course, initialLessonId }: CoursePlayerProps) {
                 </div>
 
                 <div className="max-w-4xl mx-auto w-full p-6 lg:p-12 pb-24">
-                    {/* Video Player */}
-                    {currentLesson.video_url && (
-                        <div className="aspect-video bg-black rounded-xl overflow-hidden shadow-lg mb-8 relative group">
-                            <div className="absolute inset-0 flex items-center justify-center">
-                                {/* Simple Embed Placeholder */}
-                                {isYoutube(currentLesson.video_url) ? (
-                                    <iframe
-                                        src={getYoutubeEmbed(currentLesson.video_url)}
-                                        className="w-full h-full"
-                                        allowFullScreen
-                                        frameBorder="0"
-                                    />
-                                ) : (
-                                    <div className="text-white text-center">
-                                        <Video className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                                        <p className="text-sm opacity-70">Video kaynağı yüklenemedi veya desteklenmiyor.</p>
-                                        <a href={currentLesson.video_url} target="_blank" className="text-blue-400 hover:underline mt-2 inline-block">Linke git</a>
+                    {/* Content Switcher */}
+                    {(typeof currentLesson.content === 'object' && currentLesson.content !== null && (currentLesson.content as any).type === 'quiz') ? (
+                        <QuizPlayer
+                            quiz={currentLesson.content as unknown as QuizContent}
+                            onComplete={(passed, score) => {
+                                // Optional: save progress to DB
+                                console.log("Quiz completed", { passed, score });
+                            }}
+                            nextLessonAvailable={!!nextLesson}
+                            onNextLesson={() => nextLesson && setCurrentLessonId(nextLesson.id)}
+                        />
+                    ) : (
+                        <>
+                            {/* Video Player */}
+                            {currentLesson.video_url && (
+                                <div className="aspect-video bg-black rounded-xl overflow-hidden shadow-lg mb-8 relative group">
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        {/* Simple Embed Placeholder */}
+                                        {isYoutube(currentLesson.video_url) ? (
+                                            <iframe
+                                                src={getYoutubeEmbed(currentLesson.video_url)}
+                                                className="w-full h-full"
+                                                allowFullScreen
+                                                frameBorder="0"
+                                            />
+                                        ) : (
+                                            <div className="text-white text-center">
+                                                <Video className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                                                <p className="text-sm opacity-70">Video kaynağı yüklenemedi veya desteklenmiyor.</p>
+                                                <a href={currentLesson.video_url} target="_blank" className="text-blue-400 hover:underline mt-2 inline-block">Linke git</a>
+                                            </div>
+                                        )}
                                     </div>
-                                )}
+                                </div>
+                            )}
+
+                            {/* Lesson Content */}
+                            <div className="prose prose-blue max-w-none">
+                                <h1 className="text-3xl font-bold text-gray-900 mb-6">{currentLesson.title}</h1>
+                                <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">
+                                    {typeof currentLesson.content === 'string' ? currentLesson.content : "İçerik görüntülenemiyor."}
+                                </div>
                             </div>
-                        </div>
+
+                            <Separator className="my-12" />
+
+                            {/* Navigation Footer */}
+                            <div className="flex items-center justify-between">
+                                <div className="flex gap-2">
+                                    {prevLesson && (
+                                        <Button variant="outline" onClick={() => setCurrentLessonId(prevLesson.id)}>
+                                            <ChevronLeft className="w-4 h-4 mr-2" />
+                                            Önceki: {prevLesson.title}
+                                        </Button>
+                                    )}
+                                </div>
+                                <div className="flex gap-2">
+                                    {nextLesson ? (
+                                        <Button onClick={() => setCurrentLessonId(nextLesson.id)}>
+                                            Sonraki: {nextLesson.title}
+                                            <ChevronRight className="w-4 h-4 ml-2" />
+                                        </Button>
+                                    ) : (
+                                        <Button className="bg-green-600 hover:bg-green-700 text-white">
+                                            <CheckCircle className="w-4 h-4 mr-2" />
+                                            Kursu Tamamla
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+                        </>
                     )}
-
-                    {/* Lesson Content */}
-                    <div className="prose prose-blue max-w-none">
-                        <h1 className="text-3xl font-bold text-gray-900 mb-6">{currentLesson.title}</h1>
-                        <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">
-                            {currentLesson.content || "İçerik bulunmuyor."}
-                        </div>
-                    </div>
-
-                    <Separator className="my-12" />
-
-                    {/* Navigation Footer */}
-                    <div className="flex items-center justify-between">
-                        <div className="flex gap-2">
-                            {prevLesson && (
-                                <Button variant="outline" onClick={() => setCurrentLessonId(prevLesson.id)}>
-                                    <ChevronLeft className="w-4 h-4 mr-2" />
-                                    Önceki: {prevLesson.title}
-                                </Button>
-                            )}
-                        </div>
-                        <div className="flex gap-2">
-                            {nextLesson ? (
-                                <Button onClick={() => setCurrentLessonId(nextLesson.id)}>
-                                    Sonraki: {nextLesson.title}
-                                    <ChevronRight className="w-4 h-4 ml-2" />
-                                </Button>
-                            ) : (
-                                <Button className="bg-green-600 hover:bg-green-700 text-white">
-                                    <CheckCircle className="w-4 h-4 mr-2" />
-                                    Kursu Tamamla
-                                </Button>
-                            )}
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>

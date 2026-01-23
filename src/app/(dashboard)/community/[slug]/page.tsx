@@ -59,19 +59,31 @@ export default async function ChannelPage({ params, searchParams }: { params: { 
     if (channel.type === 'course') {
         const course = await getCourse(channel.id);
 
-        // Check if purchased
-        let isPurchased = false;
-        if (course && course.paywalls && course.paywalls.length > 0) {
-            const paywall = course.paywalls[0];
-            const { data: purchase } = await supabase
-                .from('paywall_purchases')
-                .select('id')
-                .eq('paywall_id', paywall.id)
-                .eq('user_id', user.id)
-                .single();
-            isPurchased = !!purchase;
-        } else {
-            isPurchased = true; // Free course
+        // Check access via active enrollment
+        const { data: enrollment } = await supabase
+            .from('user_course_enrollments')
+            .select('status')
+            .eq('course_id', course?.id)
+            .eq('user_id', user.id)
+            .single();
+
+        let isPurchased = enrollment?.status === 'active';
+
+        // If no enrollment record exists yet, check if it's a free course (no paywall)
+        // or if they have a successful purchase but no enrollment record (legacy fallback)
+        if (!enrollment) {
+            const hasPaywall = course?.paywalls && course.paywalls.length > 0;
+            if (!hasPaywall) {
+                isPurchased = true; // Free course
+            } else {
+                const { data: purchase } = await supabase
+                    .from('paywall_purchases')
+                    .select('id')
+                    .eq('paywall_id', course.paywalls[0].id)
+                    .eq('user_id', user.id)
+                    .single();
+                isPurchased = !!purchase;
+            }
         }
 
         // Check if author

@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 
 import { Channel, Course, Profile } from "@/types";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, Lock, Users, Info, SquareActivity, Plus, PlayCircle, BookOpen, ArrowUpRight, Link as LinkIcon, Tags, Download, CreditCard, Loader2, CheckCircle2 } from "lucide-react";
+import { MoreHorizontal, Lock, Users, Info, SquareActivity, Plus, PlayCircle, BookOpen, ArrowUpRight, Link as LinkIcon, Tags, Download, CreditCard, Loader2, CheckCircle2, Trash2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -15,12 +15,24 @@ const CourseBuilderOverlay = dynamic(() => import("@/components/courses/course-b
     loading: () => null
 });
 
+import { deleteChannel } from "@/actions/community";
+
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
 interface CourseFeedProps {
     channel: Channel;
@@ -37,6 +49,10 @@ export function CourseFeed({ channel, user, course, isPurchased = false }: Cours
     const isBuilderOpen = searchParams?.get('view') === 'builder';
     const paywall = course?.paywalls?.[0]; // Assuming single paywall
 
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
+    const [isDeleting, setIsDeleting] = useState(false);
+
     useEffect(() => {
         setIsMounted(true);
         if (searchParams?.get('payment') === 'success') {
@@ -47,6 +63,25 @@ export function CourseFeed({ channel, user, course, isPurchased = false }: Cours
             router.replace(`?${params.toString()}`);
         }
     }, [searchParams, router]);
+
+    const handleDeleteCourse = async () => {
+        setIsDeleting(true);
+        try {
+            await deleteChannel(channel.id);
+            toast.success("Alan silindi");
+            router.push('/');
+        } catch (error) {
+            toast.error("Alan silinemedi");
+            console.error(error);
+        } finally {
+            setIsDeleting(false);
+            setIsDeleteModalOpen(false);
+        }
+    };
+
+    const handleViewCourse = () => {
+        window.open(window.location.href, '_blank');
+    };
 
     const handlePurchase = async () => {
         if (!course) return;
@@ -125,48 +160,26 @@ export function CourseFeed({ channel, user, course, isPurchased = false }: Cours
                                         </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end" className="w-56">
-                                        <DropdownMenuItem className="cursor-pointer">
+                                        <DropdownMenuItem className="cursor-pointer" onClick={handleViewCourse}>
                                             <span className="flex items-center gap-2 w-full">
                                                 Kursu görüntüle
                                                 <ArrowUpRight className="ml-auto h-4 w-4 text-gray-400" />
                                             </span>
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem className="cursor-pointer">
-                                            <span className="flex items-center gap-2 w-full">
-                                                Kilit ekranını düzenle
-                                                <ArrowUpRight className="ml-auto h-4 w-4 text-gray-400" />
-                                            </span>
-                                        </DropdownMenuItem>
-                                        <Separator className="my-1" />
+
                                         <DropdownMenuItem className="cursor-pointer" onClick={handleCopyUrl}>
                                             <span className="flex items-center gap-2">
                                                 <LinkIcon className="h-4 w-4 mr-2" />
                                                 Bağlantıyı kopyala
                                             </span>
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem className="cursor-pointer">
-                                            <span className="flex items-center gap-2">
-                                                <Tags className="h-4 w-4 mr-2" />
-                                                Etiketleri düzenle
-                                            </span>
-                                        </DropdownMenuItem>
+
                                         <Separator className="my-1" />
-                                        <DropdownMenuItem className="cursor-pointer">
+
+                                        <DropdownMenuItem className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50" onClick={() => setIsDeleteModalOpen(true)}>
                                             <span className="flex items-center gap-2">
-                                                <Download className="h-4 w-4 mr-2" />
-                                                Yorumları dışa aktar
-                                            </span>
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem className="cursor-pointer">
-                                            <span className="flex items-center gap-2">
-                                                <Download className="h-4 w-4 mr-2" />
-                                                Öğrencileri dışa aktar
-                                            </span>
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem className="cursor-pointer">
-                                            <span className="flex items-center gap-2">
-                                                <Download className="h-4 w-4 mr-2" />
-                                                Sınav sonuçlarını dışa aktar
+                                                <Trash2 className="h-4 w-4 mr-2" />
+                                                Alanı Sil
                                             </span>
                                         </DropdownMenuItem>
                                     </DropdownMenuContent>
@@ -197,20 +210,7 @@ export function CourseFeed({ channel, user, course, isPurchased = false }: Cours
                     </div>
 
 
-                    {/* Stats Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
-                        <div className="p-6 rounded-2xl border border-gray-100 bg-white shadow-sm flex flex-col justify-between h-32">
-                            <div className="flex items-center gap-2 text-gray-500 mb-1">
-                                <span className="font-medium">Bekleme listesi</span>
-                                <Info className="w-4 h-4" />
-                            </div>
-                            <span className="text-4xl font-bold text-gray-900">0</span>
-                        </div>
-                        <div className="p-6 rounded-2xl border border-gray-100 bg-white shadow-sm flex flex-col justify-between h-32">
-                            <div className="text-gray-500 font-medium mb-1">Ortalama tamamlama oranı</div>
-                            <span className="text-4xl font-bold text-gray-900">0%</span>
-                        </div>
-                    </div>
+
 
                     {/* Paywall Block */}
                     {paywall && !isPurchased && (
@@ -320,6 +320,67 @@ export function CourseFeed({ channel, user, course, isPurchased = false }: Cours
                     )}
                 </div>
             </div>
+
+            {/* Delete Confirmation Modal */}
+            <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-bold">Bu alanı silmek istediğinize emin misiniz?</DialogTitle>
+                        <DialogDescription className="pt-2">
+                            Devam ederseniz, bu alanla ilişkili <strong>TÜM verileri kalıcı olarak</strong> kaybedeceksiniz. Buna şunlar dahildir:
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="py-2">
+                        <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 text-sm text-gray-600 space-y-2 mb-4">
+                            <h4 className="font-semibold text-gray-900 mb-2">Kurs Verileri:</h4>
+                            <ul className="list-disc pl-5 space-y-1">
+                                <li>Bölümler ve dersler</li>
+                                <li>Tüm üyelerin tamamlanma ilerlemeleri</li>
+                                <li>Videolar ve dosyalar</li>
+                                <li>Yorumlar</li>
+                                <li>Alan üyeleri</li>
+                                <li>Alan ayarları: Kilit ekranları, konular, linkler vb.</li>
+                            </ul>
+                        </div>
+
+                        <p className="text-sm text-gray-600 mb-2">
+                            Onaylamak için lütfen kutucuğa <strong>SİLELİM</strong> yazın:
+                        </p>
+                        <Input
+                            value={deleteConfirmationText}
+                            onChange={(e) => setDeleteConfirmationText(e.target.value)}
+                            placeholder="SİLELİM"
+                            className="bg-white"
+                        />
+                    </div>
+
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsDeleteModalOpen(false)}
+                            disabled={isDeleting}
+                        >
+                            İptal
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={handleDeleteCourse}
+                            disabled={deleteConfirmationText !== 'SİLELİM' || isDeleting}
+                            className="bg-red-600 hover:bg-red-700"
+                        >
+                            {isDeleting ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    Siliniyor...
+                                </>
+                            ) : (
+                                'Onayla'
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Builder Overlay */}
             {isBuilderOpen && (

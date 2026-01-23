@@ -171,7 +171,7 @@ export interface CourseLesson {
     id: string;
     module_id: string;
     title: string;
-    content: string | null;
+    content: string | QuizContent | null; // Supports markdown string or JSON QuizContent
     video_url: string | null;
     attachments: any[] | null; // JSONB
     is_free: boolean;
@@ -182,8 +182,38 @@ export interface CourseLesson {
         enable_comments: boolean;
         enforce_video_completion: boolean;
         auto_advance: boolean;
+        default_tab: 'comments' | 'curriculum' | 'files';
     } | null;
     created_at: string;
+}
+
+// --- Quiz Types ---
+
+export interface QuizContent {
+    type: 'quiz';
+    settings: QuizSettings;
+    questions: QuizQuestion[];
+}
+
+export interface QuizSettings {
+    passing_grade: number; // 0-100
+    is_enforced: boolean;
+    show_answers: boolean;
+}
+
+export interface QuizQuestion {
+    id: string;
+    text: string;
+    media_url?: string | null;
+    media_type?: 'image' | 'video' | null;
+    type: 'single_choice' | 'multiple_choice'; // Added multiple_choice for future proofing/completeness
+    options: QuizOption[];
+}
+
+export interface QuizOption {
+    id: string;
+    text: string;
+    isCorrect: boolean;
 }
 
 export interface UserCourseProgress {

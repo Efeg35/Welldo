@@ -293,3 +293,58 @@ export async function updateCourse(courseId: string, updates: Partial<Course>) {
     revalidatePath('/community');
     return data;
 }
+
+// --- Student Management ---
+
+export async function getCourseStudents(courseId: string) {
+    const supabase = await createClient();
+
+    // Check if user is instructor/admin
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Unauthorized");
+
+    const { data, error } = await supabase
+        .from('user_course_enrollments')
+        .select(`
+            id,
+            user_id,
+            enrolled_at,
+            status,
+            profiles:user_id (
+                id,
+                full_name,
+                email,
+                avatar_url
+            )
+        `)
+        .eq('course_id', courseId)
+        .order('enrolled_at', { ascending: false });
+
+    if (error) {
+        console.error("Error fetching course students:", error);
+        throw new Error(`Failed to fetch students: ${error.message} (${error.code})`);
+    }
+
+    return data;
+}
+
+export async function revokeCourseAccess(courseId: string, userId: string) {
+    const supabase = await createClient();
+
+    // Check authorization
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Unauthorized");
+
+    const { error } = await supabase
+        .from('user_course_enrollments')
+        .update({ status: 'revoked' })
+        .eq('course_id', courseId)
+        .eq('user_id', userId);
+
+    if (error) {
+        console.error("Error revoking access:", error);
+        throw new Error("Failed to revoke access");
+    }
+
+    revalidatePath('/community');
+}
