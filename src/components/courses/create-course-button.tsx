@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { CreateCourseModal } from "./create-course-modal";
+import { cn } from "@/lib/utils";
 
 interface CreateCourseButtonProps {
     communityId: string;
@@ -24,7 +25,11 @@ export function CreateCourseButton({
 
     return (
         <>
-            <Button onClick={() => setIsOpen(true)} size={size} className={className}>
+            <Button
+                onClick={() => setIsOpen(true)}
+                size={size}
+                className={cn("rounded-full bg-gray-900 text-white hover:bg-gray-800 shadow-md transition-all", className)}
+            >
                 {size !== "icon" && <Plus className="w-4 h-4 mr-2" />}
                 {label}
             </Button>

@@ -12,6 +12,7 @@ import { CoursePlayer } from "@/components/community/course-player";
 import { getChannelMessages } from "@/actions/chat";
 import { getCourse } from "@/actions/courses";
 import { Profile, Message } from "@/types";
+import { SpaceLockScreen } from "@/components/community/space-lock-screen";
 
 export default async function ChannelPage({ params, searchParams }: { params: { slug: string }, searchParams: { sort?: string, view?: string, lessonId?: string } }) {
     const supabase = await createClient();
@@ -43,89 +44,80 @@ export default async function ChannelPage({ params, searchParams }: { params: { 
         return notFound();
     }
 
+    // --- GLOBAL ACCESS CHECK ---
+    const { data: profileRole } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+    const isOwner = profileRole?.role === 'instructor' || profileRole?.role === 'admin';
+
+    // 1. Fetch Course Data early if it's a course to get its ID for enrollment check
+    let course = null;
+    if (channel.type === 'course') {
+        course = await getCourse(channel.id);
+    }
+
+    // 2. Determine Access
+    let hasAccess = isOwner || channel.access_level === 'open';
+
+    if (!hasAccess) {
+        // Check space members (generic)
+        const { data: spaceMember } = await supabase
+            .from('space_members')
+            .select('id')
+            .eq('channel_id', channel.id)
+            .eq('user_id', user.id)
+            .single();
+
+        if (spaceMember) hasAccess = true;
+
+        // Check course enrollments (specific to course)
+        if (!hasAccess && channel.type === 'course' && course) {
+            const { data: enrollment } = await supabase
+                .from('user_course_enrollments')
+                .select('status')
+                .eq('course_id', course.id)
+                .eq('user_id', user.id)
+                .eq('status', 'active')
+                .single();
+            if (enrollment) hasAccess = true;
+        }
+    }
+
+    // 3. ENFORCE ACCESS POLICY (Secret)
+    if (!hasAccess && channel.access_level === 'secret') {
+        return notFound();
+    }
+
     const { sort = 'latest' } = await searchParams;
 
-    // Render based on channel type
+    // 4. Render based on channel type & access
     if (channel.type === 'event') {
+        if (!hasAccess) return <SpaceLockScreen channel={channel} />;
         const events = await getEvents(channel.id, 'upcoming');
         return <EventFeed channel={channel} user={profile} initialEvents={events} />;
     }
 
     if (channel.type === 'chat') {
+        if (!hasAccess) return <SpaceLockScreen channel={channel} />;
         const messages = await getChannelMessages(channel.id);
         return <ChatFeed channel={channel} user={profile} initialMessages={messages as Message[]} />;
     }
 
     if (channel.type === 'course') {
-        const course = await getCourse(channel.id);
-
-        // Check access via active enrollment
-        const { data: enrollment } = await supabase
-            .from('user_course_enrollments')
-            .select('status')
-            .eq('course_id', course?.id)
-            .eq('user_id', user.id)
-            .single();
-
-        let isPurchased = enrollment?.status === 'active';
-
-        // If no enrollment record exists yet, check if it's a free course (no paywall)
-        // or if they have a successful purchase but no enrollment record (legacy fallback)
-        if (!enrollment) {
-            const hasPaywall = course?.paywalls && course.paywalls.length > 0;
-            if (!hasPaywall) {
-                isPurchased = true; // Free course
-            } else {
-                const { data: purchase } = await supabase
-                    .from('paywall_purchases')
-                    .select('id')
-                    .eq('paywall_id', course.paywalls[0].id)
-                    .eq('user_id', user.id)
-                    .single();
-                isPurchased = !!purchase;
-            }
-        }
-
-        // Check if author
-        const isAuthor = course?.channel?.community?.owner_id === user.id; // Just a guess, need to check data shape or logic
-        // Actually, getCourse returns nested community owner?
-        // Let's rely on course.channel.community.owner_id if available.
-        // getCourse query:
-        // modules:..., channel:channels(*, community:communities(*, owner:profiles(*))) NO, query is currently:
-        /*
-          .select(`
-            *,
-            modules:course_modules(
-                *,
-                lessons:course_lessons(*)
-            ),
-            paywalls(*)
-        `)
-       */
-        // It does NOT fetch channel.community.owner.
-        // But we have profile.id (current user).
-        // We can check if profile.id is the community owner if we had community owner id.
-        // 'channel' variable (fetched via getChannelBySlug) MIGHT have owner_id if getChannelBySlug joins it.
-        // getChannelBySlug in actions/community.ts usually joins community?
-
-        // Let's check getChannelBySlug or simply Assume channel.community_id is known.
-        // We can fetch community owner separately or rely on checking if user is the instructor later.
-        // For now, let's pass isPurchased status.
-
-        // Also pass 'isAuthor' just in case.
-        // 'channel' object has community_id.
+        // CourseFeed handles its own internal "Lock Screen" (Paywall) if !hasAccess
+        // But we already calculated hasAccess here based on enrollment/owner.
+        // Let's pass it down.
         const { data: community } = await supabase
             .from('communities')
             .select('owner_id')
             .eq('id', channel.community_id)
             .single();
 
-        const isInstructor = community?.owner_id === user.id;
+        const instructorStatus = community?.owner_id === user.id;
 
-        return <CourseFeed channel={channel} user={profile} course={course} isPurchased={isPurchased || isInstructor} />;
+        return <CourseFeed channel={channel} user={profile} course={course} isPurchased={hasAccess || instructorStatus} isInstructor={instructorStatus} />;
     }
 
-    // Default to Post Feed (for 'post' type or others)
+    // Default to Post Feed
+    if (!hasAccess) return <SpaceLockScreen channel={channel} />;
     const posts = await getPosts(channel.id, sort);
     const communityId = channel.community_id;
 

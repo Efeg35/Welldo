@@ -24,7 +24,7 @@ export function CustomizeTab({ course, channel, onUpdate }: CustomizeTabProps) {
     const [name, setName] = React.useState(channel.name);
     const [category, setCategory] = React.useState(channel.category || 'Alanlar');
     const [hideFromSidebar, setHideFromSidebar] = React.useState(channel.settings?.hide_from_sidebar || false);
-    const [accessLevel, setAccessLevel] = React.useState<Channel['access_level']>(channel.access_level || 'open');
+    const [accessLevel, setAccessLevel] = React.useState<Channel['access_level'] | null>(channel.access_level || null);
     const [topics, setTopics] = React.useState<string[]>(course.topics || []);
     const [thumbnailUrl, setThumbnailUrl] = React.useState(course.thumbnail_url);
     const [newTopic, setNewTopic] = React.useState("");
@@ -71,7 +71,7 @@ export function CustomizeTab({ course, channel, onUpdate }: CustomizeTabProps) {
             await updateChannel(channel.id, {
                 name,
                 category,
-                access_level: accessLevel,
+                access_level: accessLevel || undefined,
                 settings: { ...channel.settings, hide_from_sidebar: hideFromSidebar }
             });
 
@@ -79,7 +79,8 @@ export function CustomizeTab({ course, channel, onUpdate }: CustomizeTabProps) {
             await updateCourse(course.id, {
                 title: name,
                 topics,
-                thumbnail_url: thumbnailUrl
+                thumbnail_url: thumbnailUrl,
+                status: accessLevel ? 'published' : 'draft'
             });
 
             toast.success("Değişiklikler kaydedildi");
@@ -102,6 +103,18 @@ export function CustomizeTab({ course, channel, onUpdate }: CustomizeTabProps) {
     const removeTopic = (index: number) => {
         setTopics(topics.filter((_, i) => i !== index));
     };
+
+    React.useEffect(() => {
+        if (window.location.hash === '#access') {
+            // Small timeout to ensure DOM is ready
+            setTimeout(() => {
+                const element = document.getElementById('access');
+                if (element) {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 500);
+        }
+    }, []);
 
     return (
         <div className="max-w-3xl mx-auto space-y-12 pb-20">
@@ -144,7 +157,7 @@ export function CustomizeTab({ course, channel, onUpdate }: CustomizeTabProps) {
             </section>
 
             {/* Access Settings */}
-            <section className="space-y-6">
+            <section id="access" className="space-y-6">
                 <h3 className="text-xl font-bold text-gray-900">Erişim</h3>
 
                 {course.status === 'draft' && (
@@ -170,7 +183,7 @@ export function CustomizeTab({ course, channel, onUpdate }: CustomizeTabProps) {
                     <p className="text-sm text-gray-500">Alanı yayınlamaya hazır olduğunuzda, lütfen aşağıdaki erişim ayarlarından birini seçin:</p>
 
                     <RadioGroup
-                        value={accessLevel}
+                        value={accessLevel || ""}
                         onValueChange={(val) => setAccessLevel(val as any)}
                         className="space-y-6 pt-4"
                     >

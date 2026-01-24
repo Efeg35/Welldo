@@ -11,7 +11,7 @@ const featureTabs = [
     { href: "/events", label: "Etkinlikler" },
     { href: "/live", label: "Canlı Yayın" },
     { href: "/courses", label: "Kurslar" },
-    { href: "/email", label: "E-posta" },
+
     { href: "/payments", label: "Ödemeler" },
 ];
 

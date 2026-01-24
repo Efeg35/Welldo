@@ -39,9 +39,10 @@ interface CourseFeedProps {
     user: Profile;
     course: Course | null;
     isPurchased?: boolean;
+    isInstructor?: boolean;
 }
 
-export function CourseFeed({ channel, user, course, isPurchased = false }: CourseFeedProps) {
+export function CourseFeed({ channel, user, course, isPurchased = false, isInstructor = false }: CourseFeedProps) {
     const searchParams = useSearchParams();
     const router = useRouter();
     const [isMounted, setIsMounted] = useState(false);
@@ -192,9 +193,21 @@ export function CourseFeed({ channel, user, course, isPurchased = false }: Cours
                         <div className="flex items-center gap-4 text-gray-600">
                             <div className="flex items-center gap-2">
                                 <span className="font-semibold text-gray-400 uppercase text-xs tracking-wider">DURUM:</span>
-                                <Badge variant={course.status === 'published' ? 'default' : 'secondary'} className="capitalize">
-                                    {course.status === 'published' ? 'Yayında' : 'Taslak'}
-                                </Badge>
+                                {course.status === 'draft' && isInstructor ? (
+                                    <button
+                                        onClick={() => {
+                                            window.location.href = `?view=builder&tab=customize#access`;
+                                        }}
+                                        className="bg-yellow-50 text-yellow-700 border border-yellow-200/60 shadow-sm rounded-full px-2 py-0.5 text-[10px] font-bold hover:bg-yellow-100 hover:border-yellow-300 transition-all cursor-pointer flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-yellow-500/20"
+                                    >
+                                        <div className="w-1 h-1 rounded-full bg-yellow-500 animate-pulse"></div>
+                                        TASLAK
+                                    </button>
+                                ) : (
+                                    <Badge variant={course.status === 'published' ? 'default' : 'secondary'} className="capitalize">
+                                        {course.status === 'published' ? 'Yayında' : 'Taslak'}
+                                    </Badge>
+                                )}
                             </div>
                             <div className="w-px h-4 bg-gray-300"></div>
                             <div className="flex items-center gap-2">

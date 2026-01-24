@@ -149,7 +149,8 @@ const tabs: { id: Tab; label: string; icon?: any }[] = [
 
 
 export function CourseBuilderOverlay({ course, channel, onClose }: CourseBuilderOverlayProps) {
-    const [activeTab, setActiveTab] = useState<Tab>('lessons');
+    const searchParams = useSearchParams();
+    const [activeTab, setActiveTab] = useState<Tab>((searchParams?.get('tab') as Tab) || 'lessons');
     const [isCourseTypeModalOpen, setIsCourseTypeModalOpen] = useState(false);
     const [isConfirmationOpen, setIsConfirmationOpen] = useState(false);
     const [selectedCourseType, setSelectedCourseType] = useState((channel.settings as any)?.course_type || 'self-paced');
@@ -199,6 +200,13 @@ export function CourseBuilderOverlay({ course, channel, onClose }: CourseBuilder
     useEffect(() => {
         setModules(course.modules || []);
     }, [course.modules]);
+
+    useEffect(() => {
+        const tab = searchParams?.get('tab') as Tab;
+        if (tab && tabs.find(t => t.id === tab)) {
+            setActiveTab(tab);
+        }
+    }, [searchParams]);
 
     const handleDragEnd = async (event: DragEndEvent) => {
         const { active, over } = event;

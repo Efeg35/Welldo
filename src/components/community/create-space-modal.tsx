@@ -33,15 +33,13 @@ interface CreateSpaceModalProps {
 }
 
 type Step = 'type-selection' | 'details' | 'course-type';
-type SpaceType = 'post' | 'chat' | 'event' | 'course' | 'member' | 'image';
+type SpaceType = 'post' | 'chat' | 'event' | 'course';
 
 const SPACE_TYPES: { type: SpaceType; label: string; icon: any; description: string }[] = [
     { type: 'post', label: 'Gönderiler', icon: MessageSquare, description: 'Tartışmalar ve içerik paylaşımı için esnek bir alan.' },
     { type: 'event', label: 'Etkinlikler', icon: Calendar, description: 'Yaklaşan etkinlikleri düzenleyin ve yönetin.' },
     { type: 'chat', label: 'Sohbet', icon: MessageCircle, description: 'Topluluk üyeleriniz için gerçek zamanlı mesajlaşma.' },
     { type: 'course', label: 'Kurs', icon: BookOpen, description: 'Yapılandırılmış içerik ve dersler sunun.' },
-    { type: 'member', label: 'Üyeler', icon: Users, description: 'Topluluk üyeleri dizini.' },
-    { type: 'image', label: 'Görseller', icon: ImageIcon, description: 'Fotoğraflar ve görsel içerikler için galeri alanı.' },
 ];
 
 export function CreateSpaceModal({ isOpen, onClose, communityId, onSwitchToCourse }: CreateSpaceModalProps) {

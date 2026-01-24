@@ -183,6 +183,7 @@ export async function toggleLike(postId: string) {
 
 export async function getSidebarData(communityId?: string) {
     const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
 
     // If no communityId provided, try to find the first one or default
     let targetedCommunityId = communityId;
@@ -193,11 +194,46 @@ export async function getSidebarData(communityId?: string) {
 
     if (!targetedCommunityId) return { spaces: [], links: [] };
 
-    const { data: spaces } = await supabase
+    let { data: rawSpaces } = await supabase
         .from('channels')
         .select('*')
         .eq('community_id', targetedCommunityId)
         .order('order_index', { ascending: true });
+
+    let spaces = rawSpaces || [];
+
+    // Apply visibility filtering for 'secret' spaces
+    if (user && spaces.length > 0) {
+        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+        const isStaff = profile?.role === 'instructor' || profile?.role === 'admin';
+
+        if (!isStaff) {
+            // Fetch user's space memberships to see which secret ones they can see
+            const { data: spaceMemberships } = await supabase
+                .from('space_members') // Assuming this table exists for private access
+                .select('channel_id')
+                .eq('user_id', user.id);
+
+            // Note: Also need to check user_course_enrollments for courses
+            const { data: enrollments } = await supabase
+                .from('user_course_enrollments')
+                .select('course_id, courses(channel_id)')
+                .eq('user_id', user.id)
+                .eq('status', 'active');
+
+            const joinedSpaceIds = new Set([
+                ...(spaceMemberships?.map(m => m.channel_id) || []),
+                ...(enrollments?.map((e: any) => e.courses?.channel_id).filter(Boolean) || [])
+            ]);
+
+            spaces = spaces.filter(space => {
+                if (space.access_level === 'secret') {
+                    return joinedSpaceIds.has(space.id);
+                }
+                return true;
+            });
+        }
+    }
 
     const { data: links } = await supabase
         .from('community_links')
@@ -206,7 +242,7 @@ export async function getSidebarData(communityId?: string) {
         .order('order_index', { ascending: true });
 
     return {
-        spaces: spaces || [],
+        spaces: spaces,
         links: links || []
     };
 }
@@ -313,7 +349,7 @@ export async function createChannel(params: CreateChannelParams) {
             icon: params.icon || 'circle', // Default icon
             category: params.category || 'Alanlar',
             order_index: newOrderIndex,
-            access_level: params.access_level || 'open',
+            access_level: params.access_level, // Remove default 'open'
             settings: params.settings || {},
         })
         .select()
