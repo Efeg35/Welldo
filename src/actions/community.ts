@@ -462,3 +462,85 @@ export async function deleteChannel(channelId: string) {
     revalidatePath('/community');
     return { success: true };
 }
+
+export async function addSpaceMember(channelId: string, userId: string) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) throw new Error("Unauthorized");
+
+    // Check if user is already a member
+    const { data: existing } = await supabase
+        .from('space_members')
+        .select('id')
+        .eq('channel_id', channelId)
+        .eq('user_id', userId)
+        .single();
+
+    if (existing) return;
+
+    const { error } = await supabase
+        .from('space_members')
+        .insert({
+            channel_id: channelId,
+            user_id: userId
+        });
+
+    if (error) {
+        console.error("Error adding space member:", error);
+        throw new Error("Failed to add member");
+    }
+
+    revalidatePath('/community');
+    revalidatePath(`/community/[slug]`, 'page'); // Revalidate dynamic routes if possible, or exact path
+}
+
+export async function removeSpaceMember(channelId: string, userId: string) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) throw new Error("Unauthorized");
+
+    const { error } = await supabase
+        .from('space_members')
+        .delete()
+        .eq('channel_id', channelId)
+        .eq('user_id', userId);
+
+    if (error) {
+        console.error("Error removing space member:", error);
+        throw new Error("Failed to remove member");
+    }
+
+    revalidatePath('/community');
+}
+
+export async function searchUsers(query: string) {
+    const supabase = await createClient();
+
+    if (!query || query.length < 2) return [];
+
+    const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, avatar_url, email') // Select email only if privacy allows or for admin
+        .ilike('full_name', `%${query}%`)
+        .limit(10);
+
+    if (error) return [];
+    return data;
+}
+
+export async function getSpaceMembers(channelId: string) {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+        .from('space_members')
+        .select(`
+            user_id,
+            profile:profiles(*)
+        `)
+        .eq('channel_id', channelId);
+
+    if (error) return [];
+    return data.map(m => m.profile).filter(Boolean);
+}

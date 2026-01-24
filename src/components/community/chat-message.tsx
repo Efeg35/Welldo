@@ -9,10 +9,24 @@ import { cn } from "@/lib/utils";
 interface ChatMessageProps {
     message: Message;
     isContinuous?: boolean; // If true, hide avatar/name for consecutive messages from same user
+    currentUser?: Profile;
 }
 
-export function ChatMessage({ message, isContinuous = false }: ChatMessageProps) {
-    const user = message.user;
+export function ChatMessage({ message, isContinuous = false, currentUser }: ChatMessageProps) {
+    // Robustly find user profile from either 'user' or 'profiles' join
+    let user = message.user || (message as any).profiles;
+
+    // Fallback to currentUser if IDs match and joined profile is incomplete
+    if (currentUser && message.user_id === currentUser.id) {
+        user = {
+            ...user,
+            ...currentUser,
+            // Prioritize database role if exists, but fallback to current session
+            role: user?.role || currentUser.role,
+            full_name: user?.full_name || currentUser.full_name
+        };
+    }
+
     // Fallback if user join failed
     const userName = user?.full_name || "Bilinmeyen Kullanıcı";
     const userRole = user?.role === 'admin' ? 'Yönetici' : user?.role === 'instructor' ? 'Eğitmen' : '';

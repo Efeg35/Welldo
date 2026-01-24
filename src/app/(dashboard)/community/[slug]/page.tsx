@@ -6,10 +6,11 @@ import { getEvents } from "@/actions/events";
 import { PostFeed } from "@/components/community/post-feed";
 import { EventFeed } from "@/components/community/event-feed";
 import { ChatFeed } from "@/components/community/chat-feed";
+import { SpaceChat } from "@/components/community/space-chat";
 import { CourseFeed } from "@/components/community/course-feed";
 
 import { CoursePlayer } from "@/components/community/course-player";
-import { getChannelMessages } from "@/actions/chat";
+import { getChannelMessages, getChannelMembers } from "@/actions/chat";
 import { getCourse } from "@/actions/courses";
 import { Profile, Message } from "@/types";
 import { SpaceLockScreen } from "@/components/community/space-lock-screen";
@@ -22,31 +23,48 @@ export default async function ChannelPage({ params, searchParams }: { params: { 
         redirect("/login");
     }
 
-    // Map Auth User to Profile interface
+    // 1. Fetch Full Profile from DB
+    const { data: dbProfile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+    // Map Auth User + DB Profile to Profile interface
     const profile: Profile = {
-        id: user.id || "",
-        email: user.email || null,
-        full_name: (user.user_metadata?.full_name as string) || null,
-        avatar_url: (user.user_metadata?.avatar_url as string) || null,
-        role: (user.user_metadata?.role as 'member' | 'instructor' | 'admin') || 'member',
-        iyzico_sub_merchant_key: null,
-        bio: null,
-        created_at: user.created_at,
-        updated_at: user.updated_at || user.created_at
+        id: user.id,
+        email: user.email || dbProfile?.email || null,
+        full_name: dbProfile?.full_name || (user.user_metadata?.full_name as string) || "Bilinmeyen",
+        avatar_url: dbProfile?.avatar_url || (user.user_metadata?.avatar_url as string) || null,
+        role: dbProfile?.role || (user.user_metadata?.role as any) || 'member',
+        iyzico_sub_merchant_key: dbProfile?.iyzico_sub_merchant_key || null,
+        bio: dbProfile?.bio || null,
+        created_at: dbProfile?.created_at || user.created_at,
+        updated_at: dbProfile?.updated_at || user.updated_at || user.created_at
     };
 
     const { slug } = await params;
 
-    // Fetch Channel Details
+    // 2. Fetch Channel Details
     const channel = await getChannelBySlug(slug);
 
     if (!channel) {
         return notFound();
     }
 
-    // --- GLOBAL ACCESS CHECK ---
-    const { data: profileRole } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-    const isOwner = profileRole?.role === 'instructor' || profileRole?.role === 'admin';
+    // 3. Fetch Community Details to check ownership
+    const { data: community } = await supabase
+        .from('communities')
+        .select('owner_id')
+        .eq('id', channel.community_id)
+        .single();
+
+    const isOwner = profile.role === 'admin' || profile.role === 'instructor' || community?.owner_id === user.id;
+
+    // Elevate role in the passed profile object if they are the owner but role says member
+    if (community?.owner_id === user.id && profile.role === 'member') {
+        profile.role = 'instructor';
+    }
 
     // 1. Fetch Course Data early if it's a course to get its ID for enrollment check
     let course = null;
@@ -98,7 +116,8 @@ export default async function ChannelPage({ params, searchParams }: { params: { 
     if (channel.type === 'chat') {
         if (!hasAccess) return <SpaceLockScreen channel={channel} />;
         const messages = await getChannelMessages(channel.id);
-        return <ChatFeed channel={channel} user={profile} initialMessages={messages as Message[]} />;
+        const members = await getChannelMembers(channel.id);
+        return <SpaceChat channel={channel} user={profile} initialMessages={messages as Message[]} members={members as unknown as Profile[]} />;
     }
 
     if (channel.type === 'course') {

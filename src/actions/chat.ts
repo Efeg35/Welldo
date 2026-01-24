@@ -177,7 +177,7 @@ export async function getChannelMessages(channelId: string) {
         .from('messages')
         .select(`
             *,
-            user:profiles(*)
+            user:profiles(*), profiles:profiles!messages_user_id_fkey(*)
         `)
         .eq('channel_id', channelId)
         .order('created_at', { ascending: true })
@@ -218,4 +218,44 @@ export async function sendChannelMessage(channelId: string, content: string) {
 
     revalidatePath(`/community`);
     return message;
+}
+
+export async function getChannelMembers(channelId: string) {
+    const supabase = await createClient();
+
+    // Ideally, we should fetch from a channel_members table or similar. 
+    // Since we don't have a direct "channel_members" table for all channels (only space_members for private),
+    // we might need to rely on who has posted or who is in the community if it's open.
+    // For this MVP, let's fetch users who are members of the COMMUNITY.
+    // AND if it is a private space, filter by space_members.
+
+    // 1. Get Channel to check type/community
+    const { data: channel } = await supabase
+        .from('channels')
+        .select('community_id, access_level')
+        .eq('id', channelId)
+        .single();
+
+    if (!channel) return [];
+
+    let query = supabase
+        .from('memberships')
+        .select(`
+            user_id,
+            profile:profiles(*)
+        `)
+        .eq('community_id', channel.community_id)
+        .eq('status', 'active');
+
+    // If it is a SECRET or PRIVATE channel (and not course type which uses enrollments), 
+    // we should ideally filter. But for now, let's just return community members 
+    // and maybe distinct them. 
+    // A better approach for "Chat UI" is usually showing "Online" or "All Members".
+
+    const { data: memberships, error } = await query;
+
+    if (error) return [];
+
+    // Map to profile list
+    return memberships.map(m => m.profile).filter(Boolean);
 }
