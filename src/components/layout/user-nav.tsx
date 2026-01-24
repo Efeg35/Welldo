@@ -13,20 +13,32 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { LogOut, User, Settings } from "lucide-react";
+import { LogOut, User, Settings, CreditCard } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Profile } from "@/types";
+import Link from "next/link";
 
 export function UserNav() {
     const router = useRouter();
     const supabase = createClient();
     const [user, setUser] = useState<any>(null);
+    const [profile, setProfile] = useState<Profile | null>(null);
 
     useEffect(() => {
-        async function getUser() {
+        async function getData() {
             const { data: { user } } = await supabase.auth.getUser();
             setUser(user);
+
+            if (user) {
+                const { data: profileData } = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', user.id)
+                    .single();
+                setProfile(profileData);
+            }
         }
-        getUser();
+        getData();
     }, []);
 
     const handleSignOut = async () => {
@@ -35,20 +47,22 @@ export function UserNav() {
         router.push("/login"); // or root
     };
 
+    const isInstructor = profile?.role === 'instructor' || profile?.role === 'admin';
+
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-9 w-9 rounded-full">
                     <Avatar className="h-9 w-9">
-                        <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.id || 'User'}`} />
-                        <AvatarFallback>U</AvatarFallback>
+                        <AvatarImage src={profile?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.id || 'User'}`} />
+                        <AvatarFallback>{profile?.full_name?.charAt(0) || 'U'}</AvatarFallback>
                     </Avatar>
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56" align="end" forceMount>
                 <DropdownMenuLabel className="font-normal">
                     <div className="flex flex-col space-y-1">
-                        <p className="text-sm font-medium leading-none">Hesabım</p>
+                        <p className="text-sm font-medium leading-none">{profile?.full_name || 'Hesabım'}</p>
                         <p className="text-xs leading-none text-muted-foreground truncate">
                             {user?.email}
                         </p>
@@ -56,17 +70,29 @@ export function UserNav() {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>
-                    <DropdownMenuItem>
-                        <User className="mr-2 h-4 w-4" />
-                        <span>Profil</span>
+                    <DropdownMenuItem asChild>
+                        <Link href="/dashboard/profile" className="cursor-pointer flex w-full">
+                            <User className="mr-2 h-4 w-4" />
+                            <span>Profil</span>
+                        </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem>
-                        <Settings className="mr-2 h-4 w-4" />
-                        <span>Ayarlar</span>
+                    <DropdownMenuItem asChild>
+                        <Link href="/dashboard/settings" className="cursor-pointer flex w-full">
+                            <Settings className="mr-2 h-4 w-4" />
+                            <span>Ayarlar</span>
+                        </Link>
                     </DropdownMenuItem>
+                    {isInstructor && (
+                        <DropdownMenuItem asChild>
+                            <Link href="/dashboard/settings/payouts" className="cursor-pointer flex w-full">
+                                <CreditCard className="mr-2 h-4 w-4" />
+                                <span>Ödeme Ayarları</span>
+                            </Link>
+                        </DropdownMenuItem>
+                    )}
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleSignOut} className="text-red-600 focus:text-red-600">
+                <DropdownMenuItem onClick={handleSignOut} className="text-red-600 focus:text-red-600 cursor-pointer">
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>Çıkış Yap</span>
                 </DropdownMenuItem>

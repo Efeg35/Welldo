@@ -26,6 +26,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { CreateSpaceModal } from "@/components/community/create-space-modal";
 import { CreateCourseModal } from "@/components/courses/create-course-modal";
+import { SidebarLinksSection } from "@/components/layout/sidebar-links-section";
 
 interface SidebarProps {
     communityName?: string;
@@ -50,8 +51,14 @@ const iconMap: Record<string, any> = {
     'hand': Users,
     'smartphone': Smartphone,
     'globe': Globe,
-    'link': LinkIcon,
     'book-open': BookOpen,
+};
+
+const typeIconMap: Record<string, any> = {
+    'post': MessageSquare,
+    'event': Calendar,
+    'chat': MessageCircle,
+    'course': BookOpen,
 };
 
 export function Sidebar({
@@ -143,7 +150,7 @@ export function Sidebar({
                 </div>
 
                 {/* Dynamic Spaces */}
-                <div className="space-y-6">
+                <div className="space-y-1">
                     {Object.entries(groupedSpaces).map(([category, categorySpaces]) => (
                         <div key={category}>
                             {category !== 'Spaces' && category !== 'Diğer' && category !== 'Alanlar' && (
@@ -154,7 +161,7 @@ export function Sidebar({
 
                             <div className="space-y-1">
                                 {(categorySpaces as any[]).map((space: any) => {
-                                    const Icon = iconMap[space.icon] || MessageSquare;
+                                    const Icon = iconMap[space.icon] || typeIconMap[space.type] || MessageSquare;
                                     const href = `/community/${space.slug}`;
                                     const isActive = pathname === href;
                                     return (
@@ -178,53 +185,13 @@ export function Sidebar({
                     ))}
                 </div>
 
-                {/* Links Section */}
-                {links.length > 0 && (
-                    <div>
-                        <h3 className="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 mt-6">
-                            Bağlantılar
-                        </h3>
-                        <div className="space-y-1">
-                            {links.map((link) => {
-                                const Icon = iconMap[link.icon] || LinkIcon;
-                                return (
-                                    <a
-                                        key={link.id}
-                                        href={link.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
-                                    >
-                                        <Icon className="w-4 h-4" />
-                                        {link.label}
-                                    </a>
-                                );
-                            })}
-                        </div>
-                    </div>
-                )}
+                {/* Links Section - Realtime */}
+                <SidebarLinksSection
+                    communityId={spaces?.[0]?.community_id || ""}
+                    canEdit={canCreateSpace || false}
+                />
             </nav>
 
-            {/* Settings Section (Instructors Only) */}
-            {canCreateSpace && (
-                <div className="p-4 border-t border-border">
-                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                        Ayarlar
-                    </h3>
-                    <Link
-                        href="/dashboard/settings/payouts"
-                        className={cn(
-                            "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
-                            pathname === "/dashboard/settings/payouts"
-                                ? "bg-white/10 text-white font-medium"
-                                : "text-gray-400 hover:text-white hover:bg-white/5"
-                        )}
-                    >
-                        <CreditCard className="w-4 h-4" />
-                        Ödeme Ayarları
-                    </Link>
-                </div>
-            )}
 
             {/* Go Live Button */}
             {enabledFeatures.events && (

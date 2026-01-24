@@ -70,6 +70,13 @@ export function CreateSpaceModal({ isOpen, onClose, communityId, onSwitchToCours
         // Auto-generate slug if empty (simple version)
         const finalSlug = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
+        const iconMap: Record<string, string> = {
+            post: 'message-square',
+            event: 'calendar',
+            chat: 'message-circle',
+            course: 'book-open'
+        };
+
         startTransition(async () => {
             try {
                 await createChannel({
@@ -80,7 +87,7 @@ export function CreateSpaceModal({ isOpen, onClose, communityId, onSwitchToCours
                     access_level: access,
                     category,
                     settings: { notifications },
-                    icon: SPACE_TYPES.find(t => t.type === selectedType)?.icon.displayName || 'circle' // Simplification
+                    icon: iconMap[selectedType] || 'message-square'
                 });
                 onClose();
                 router.refresh();
