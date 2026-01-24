@@ -2,10 +2,17 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, Plus, MapPin, Video, Calendar, User, AlignLeft } from "lucide-react";
+import { Plus, MapPin, Video, Calendar, User, AlignLeft, MoreHorizontal, Trash2 } from "lucide-react";
 import { CreateEventModal } from "./create-event";
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { DeleteSpaceDialog } from "./delete-space-dialog";
 
 import { Channel, Profile, Event } from "@/types";
 
@@ -18,6 +25,8 @@ interface EventFeedProps {
 export function EventFeed({ channel, user, initialEvents }: EventFeedProps) {
     const [filter, setFilter] = useState<'upcoming' | 'past'>('upcoming');
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const isInstructor = user?.role === 'instructor' || user?.role === 'admin';
 
     // In a real app we might fetch filtered events here, 
     // but for now let's assume initialEvents matches the default filter (upcoming)
@@ -43,9 +52,29 @@ export function EventFeed({ channel, user, initialEvents }: EventFeedProps) {
                     <Button onClick={() => setIsCreateModalOpen(true)} size="sm" className="bg-[#1c1c1c] hover:bg-black text-white rounded-full px-5 font-medium shadow-sm transition-all hover:scale-105 active:scale-95 h-9 cursor-pointer">
                         Yeni etkinlik
                     </Button>
-                    <Button variant="ghost" size="icon" className="text-muted-foreground hover:bg-muted/50 rounded-full h-9 w-9 cursor-pointer">
-                        <ChevronDown className="w-5 h-5" />
-                    </Button>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="text-muted-foreground hover:bg-muted/50 rounded-full h-9 w-9 cursor-pointer">
+                                <MoreHorizontal className="w-5 h-5" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56">
+                            {isInstructor && (
+                                <DropdownMenuItem
+                                    className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                                    onClick={() => setIsDeleteModalOpen(true)}
+                                >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    <span>Alanı Sil</span>
+                                </DropdownMenuItem>
+                            )}
+                            {!isInstructor && (
+                                <DropdownMenuItem className="text-muted-foreground italic h-8 flex items-center">
+                                    Seçenek yok
+                                </DropdownMenuItem>
+                            )}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
             </div>
 
@@ -125,6 +154,12 @@ export function EventFeed({ channel, user, initialEvents }: EventFeedProps) {
                 onClose={() => setIsCreateModalOpen(false)}
                 channelId={channel.id}
                 communityId={channel.community_id}
+            />
+            <DeleteSpaceDialog
+                isOpen={isDeleteModalOpen}
+                onClose={() => setIsDeleteModalOpen(false)}
+                channelId={channel.id}
+                channelName={channel.name}
             />
         </div>
     );

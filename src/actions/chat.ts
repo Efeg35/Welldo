@@ -170,6 +170,8 @@ export async function startConversation(otherUserId: string) {
 
 // --- Channel Chat Actions ---
 
+// --- Channel Chat Actions ---
+
 export async function getChannelMessages(channelId: string) {
     const supabase = await createClient();
 
@@ -191,19 +193,20 @@ export async function getChannelMessages(channelId: string) {
     return messages;
 }
 
-export async function sendChannelMessage(channelId: string, content: string) {
+export async function sendChannelMessage(channelId: string, content: string, attachments: any = []) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) throw new Error("Unauthorized");
-    if (!content.trim()) throw new Error("Message cannot be empty");
+    if (!content.trim() && attachments.length === 0) throw new Error("Message cannot be empty");
 
     const { error, data: message } = await supabase
         .from('messages')
         .insert({
             channel_id: channelId,
             user_id: user.id,
-            content: content.trim()
+            content: content.trim(),
+            attachments: attachments
         })
         .select(`
             *,
@@ -218,6 +221,38 @@ export async function sendChannelMessage(channelId: string, content: string) {
 
     revalidatePath(`/community`);
     return message;
+}
+
+export async function uploadFile(file: File, contextId: string) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) throw new Error("Unauthorized");
+
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
+    const filePath = `${contextId}/${fileName}`;
+
+    // Use a shared bucket or specific one. 'chat_attachments' seems appropriate.
+    const { error: uploadError } = await supabase.storage
+        .from('chat_attachments')
+        .upload(filePath, file);
+
+    if (uploadError) {
+        console.error("Upload error:", uploadError);
+        throw new Error("Failed to upload file");
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+        .from('chat_attachments')
+        .getPublicUrl(filePath);
+
+    return {
+        url: publicUrl,
+        name: file.name,
+        type: file.type,
+        size: file.size
+    };
 }
 
 export async function getChannelMembers(channelId: string) {

@@ -4,7 +4,7 @@ import { Channel, Profile, Message } from "@/types";
 import { ChatMessage } from "./chat-message";
 import { ChatInput } from "./chat-input";
 import { useEffect, useRef, useState, useMemo } from "react";
-import { sendChannelMessage } from "@/actions/chat";
+import { sendChannelMessage, uploadFile, getChannelMessages } from "@/actions/chat";
 import { createClient } from "@/lib/supabase/client";
 import { Search, Hash, Users, Bell, LogOut, PanelRightClose, MoreVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,14 @@ import { tr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { SpaceSettingsDialog } from "./space-settings-dialog";
+import { DeleteSpaceDialog } from "./delete-space-dialog";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Trash2, Settings } from "lucide-react";
 
 interface SpaceChatProps {
     channel: Channel;
@@ -28,6 +36,7 @@ export function SpaceChat({ channel, user, initialMessages, members = [] }: Spac
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
 
     // Ensure the current user is always included with the correct (potentially elevated) role
@@ -119,9 +128,30 @@ export function SpaceChat({ channel, user, initialMessages, members = [] }: Spac
         };
     }, [channel.id, user.id, supabase]);
 
-    const handleSendMessage = async (content: string) => {
+    const handleSendMessage = async (content: string, attachments: any[]) => {
         try {
-            await sendChannelMessage(channel.id, content);
+            let uploadedAttachments: any[] = [];
+
+            // Upload files if any
+            if (attachments.length > 0) {
+                // Use Promise.all for parallel uploads
+                uploadedAttachments = await Promise.all(attachments.map(async (att) => {
+                    if (att.file) {
+                        try {
+                            const result = await uploadFile(att.file, channel.id);
+                            return result;
+                        } catch (err) {
+                            console.error("Upload failed for file", att.file.name, err);
+                            return null;
+                        }
+                    }
+                    return null;
+                }));
+                // Filter out failed uploads
+                uploadedAttachments = uploadedAttachments.filter(Boolean);
+            }
+
+            await sendChannelMessage(channel.id, content, uploadedAttachments);
         } catch (error) {
             toast.error("Mesaj gönderilemedi");
         }
@@ -233,9 +263,27 @@ export function SpaceChat({ channel, user, initialMessages, members = [] }: Spac
 
                         <div className="flex items-center gap-1 border-l pl-2 sm:pl-4 ml-2">
                             {isAdmin && (
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={() => setIsSettingsOpen(true)} title="Ayarlar">
-                                    <MoreVertical className="w-4 h-4" />
-                                </Button>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" title="Daha fazla">
+                                            <MoreVertical className="w-4 h-4" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-48">
+                                        <DropdownMenuItem className="cursor-pointer" onClick={() => setIsSettingsOpen(true)}>
+                                            <Settings className="w-4 h-4 mr-2" />
+                                            <span>Alan Ayarları</span>
+                                        </DropdownMenuItem>
+                                        <Separator className="my-1" />
+                                        <DropdownMenuItem
+                                            className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                                            onClick={() => setIsDeleteModalOpen(true)}
+                                        >
+                                            <Trash2 className="w-4 h-4 mr-2" />
+                                            <span>Alanı Sil</span>
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             )}
 
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" title="Bildirimler">
@@ -266,6 +314,13 @@ export function SpaceChat({ channel, user, initialMessages, members = [] }: Spac
                 <div className="flex-shrink-0 px-4 pb-4 bg-white pt-2">
                     <ChatInput onSend={handleSendMessage} />
                 </div>
+
+                <DeleteSpaceDialog
+                    isOpen={isDeleteModalOpen}
+                    onClose={() => setIsDeleteModalOpen(false)}
+                    channelId={channel.id}
+                    channelName={channel.name}
+                />
             </div>
 
             {/* Right Sidebar - Members */}

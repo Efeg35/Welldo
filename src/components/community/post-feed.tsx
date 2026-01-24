@@ -1,10 +1,18 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal, Trash2 } from "lucide-react";
 import { CreatePost } from "@/components/community/create-post";
 import { PostCard } from "@/components/community/post-card";
 import { FeedFilter } from "@/components/community/feed-filter";
+import { useState } from "react";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { DeleteSpaceDialog } from "@/components/community/delete-space-dialog";
 
 import { Channel, Profile, Post } from "@/types";
 
@@ -16,6 +24,9 @@ interface PostFeedProps {
 }
 
 export function PostFeed({ channel, user, posts, communityId }: PostFeedProps) {
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const isInstructor = user?.role === 'instructor' || user?.role === 'admin';
+
     return (
         <div className="flex flex-col h-full bg-[#FAFAFA]">
             <div className="flex-1 overflow-y-auto relative">
@@ -36,12 +47,39 @@ export function PostFeed({ channel, user, posts, communityId }: PostFeedProps) {
                                 </Button>
                             </CreatePost>
 
-                            <Button variant="ghost" size="icon" className="text-muted-foreground hover:bg-muted/50 rounded-full h-9 w-9 cursor-pointer">
-                                <MoreHorizontal className="w-5 h-5" />
-                            </Button>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="text-muted-foreground hover:bg-muted/50 rounded-full h-9 w-9 cursor-pointer">
+                                        <MoreHorizontal className="w-5 h-5" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-56">
+                                    {isInstructor && (
+                                        <DropdownMenuItem
+                                            className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                                            onClick={() => setIsDeleteModalOpen(true)}
+                                        >
+                                            <Trash2 className="h-4 w-4 mr-2" />
+                                            <span>Alanı Sil</span>
+                                        </DropdownMenuItem>
+                                    )}
+                                    {!isInstructor && (
+                                        <DropdownMenuItem className="text-muted-foreground italic h-8 flex items-center">
+                                            Seçenek yok
+                                        </DropdownMenuItem>
+                                    )}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         </div>
                     </div>
                 </div>
+
+                <DeleteSpaceDialog
+                    isOpen={isDeleteModalOpen}
+                    onClose={() => setIsDeleteModalOpen(false)}
+                    channelId={channel.id}
+                    channelName={channel.name}
+                />
 
                 {/* Feed Content Area */}
                 <div className="max-w-5xl mx-auto w-full min-h-full">

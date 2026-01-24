@@ -7,15 +7,15 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { UserNav } from "@/components/layout/user-nav";
+import { DirectMessagePopover } from "@/components/dm/dm-popover";
 
 const navigation = [
     { href: "/dashboard", label: "Ana Sayfa" },
-    { href: "/chat", label: "Sohbet" },
     { href: "/crm", label: "Üye Yönetimi" },
     { href: "/events", label: "Etkinlikler" },
     { href: "/live", label: "Canlı Yayın" },
     { href: "/courses", label: "Kurslar" },
-    { href: "/email", label: "E-posta" },
+    { href: "/leaderboard", label: "Sıralama" },
 ];
 
 export function Header() {
@@ -71,9 +71,7 @@ export function Header() {
                         <span className="absolute 1.5 1.5 flex h-2 w-2 rounded-full bg-red-600 top-2 right-2"></span>
                     </Button>
 
-                    <Button variant="ghost" size="icon" className="rounded-full">
-                        <MessageCircle className="w-5 h-5" />
-                    </Button>
+                    <DirectMessagePopover />
 
                     <UserNav />
                 </div>

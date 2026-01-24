@@ -5,6 +5,7 @@ import { Message, Profile } from "@/types";
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { Image as ImageIcon, FileText, Paperclip } from "lucide-react";
 
 interface ChatMessageProps {
     message: Message;
@@ -70,6 +71,40 @@ export function ChatMessage({ message, isContinuous = false, currentUser }: Chat
                 <div className="text-[15px] text-gray-800 leading-relaxed whitespace-pre-wrap break-words">
                     {message.content}
                 </div>
+
+                {/* Attachments */}
+                {message.attachments && Array.isArray(message.attachments) && message.attachments.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                        {message.attachments.map((att: any, i: number) => (
+                            <div key={i} className="group relative">
+                                {att.type.startsWith('image/') ? (
+                                    <a href={att.url} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-lg border border-border bg-muted/40 max-w-[300px]">
+                                        <img
+                                            src={att.url}
+                                            alt={att.name}
+                                            className="max-h-[300px] w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                        />
+                                    </a>
+                                ) : (
+                                    <a
+                                        href={att.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-3 rounded-lg border border-border bg-gray-50 p-3 transition-colors hover:bg-gray-100 max-w-sm"
+                                    >
+                                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
+                                            <Paperclip className="h-5 w-5" />
+                                        </div>
+                                        <div className="flex-1 overflow-hidden">
+                                            <p className="truncate text-sm font-medium text-foreground">{att.name}</p>
+                                            <p className="text-xs text-muted-foreground">{Math.round(att.size / 1024)} KB</p>
+                                        </div>
+                                    </a>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
         </div>
     );

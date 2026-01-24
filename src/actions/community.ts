@@ -515,19 +515,64 @@ export async function removeSpaceMember(channelId: string, userId: string) {
     revalidatePath('/community');
 }
 
-export async function searchUsers(query: string) {
+export async function searchUsers(query: string, communityId?: string) {
     const supabase = await createClient();
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
 
-    if (!query || query.length < 2) return [];
+    if (!query || query.length < 2 || !currentUser) return [];
 
-    const { data, error } = await supabase
+    let dbQuery = supabase
         .from('profiles')
-        .select('id, full_name, avatar_url, email') // Select email only if privacy allows or for admin
+        .select(`
+            id, 
+            full_name, 
+            avatar_url, 
+            email,
+            memberships!inner(community_id)
+        `)
         .ilike('full_name', `%${query}%`)
+        .neq('id', currentUser.id) // Don't search for self
         .limit(10);
 
-    if (error) return [];
-    return data;
+    if (communityId) {
+        // Filter by specific community
+        dbQuery = dbQuery.eq('memberships.community_id', communityId);
+    } else {
+        // Fallback: Filter by any community the current user is in.
+        // First, get the current user's community IDs.
+        const { data: userMemberships } = await supabase
+            .from('memberships')
+            .select('community_id')
+            .eq('user_id', currentUser.id);
+
+        const communityIds = userMemberships?.map(m => m.community_id) || [];
+
+        if (communityIds.length > 0) {
+            dbQuery = dbQuery.in('memberships.community_id', communityIds);
+        } else {
+            // If user has no communities, they can't search anyone
+            return [];
+        }
+    }
+
+    const { data, error } = await dbQuery;
+
+    if (error) {
+        console.error("Search error:", error);
+        return [];
+    }
+
+    // Remove duplicates (a user might have multiple memberships if we didn't filter strictly)
+    const uniqueResults = data.reduce((acc: any[], current: any) => {
+        const x = acc.find(item => item.id === current.id);
+        if (!x) {
+            return acc.concat([current]);
+        } else {
+            return acc;
+        }
+    }, []);
+
+    return uniqueResults;
 }
 
 export async function getSpaceMembers(channelId: string) {

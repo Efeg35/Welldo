@@ -34,7 +34,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
-    "framer-motion": "^12.27.0",
+    "framer-motion": "^12.29.0",
     "iyzipay": "^2.0.64",
     "jsrsasign": "^11.1.0",
     "lucide-react": "^0.562.0",

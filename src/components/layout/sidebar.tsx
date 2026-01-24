@@ -146,7 +146,7 @@ export function Sidebar({
                 <div className="space-y-6">
                     {Object.entries(groupedSpaces).map(([category, categorySpaces]) => (
                         <div key={category}>
-                            {category !== 'Spaces' && category !== 'Diğer' && (
+                            {category !== 'Spaces' && category !== 'Diğer' && category !== 'Alanlar' && (
                                 <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 mt-4">
                                     {category}
                                 </h3>

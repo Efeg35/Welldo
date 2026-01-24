@@ -15,7 +15,7 @@ const CourseBuilderOverlay = dynamic(() => import("@/components/courses/course-b
     loading: () => null
 });
 
-import { deleteChannel } from "@/actions/community";
+import { DeleteSpaceDialog } from "./delete-space-dialog";
 
 import {
     DropdownMenu,
@@ -51,8 +51,6 @@ export function CourseFeed({ channel, user, course, isPurchased = false, isInstr
     const paywall = course?.paywalls?.[0]; // Assuming single paywall
 
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-    const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
-    const [isDeleting, setIsDeleting] = useState(false);
 
     useEffect(() => {
         setIsMounted(true);
@@ -64,21 +62,6 @@ export function CourseFeed({ channel, user, course, isPurchased = false, isInstr
             router.replace(`?${params.toString()}`);
         }
     }, [searchParams, router]);
-
-    const handleDeleteCourse = async () => {
-        setIsDeleting(true);
-        try {
-            await deleteChannel(channel.id);
-            toast.success("Alan silindi");
-            router.push('/');
-        } catch (error) {
-            toast.error("Alan silinemedi");
-            console.error(error);
-        } finally {
-            setIsDeleting(false);
-            setIsDeleteModalOpen(false);
-        }
-    };
 
     const handleViewCourse = () => {
         window.open(window.location.href, '_blank');
@@ -334,66 +317,12 @@ export function CourseFeed({ channel, user, course, isPurchased = false, isInstr
                 </div>
             </div>
 
-            {/* Delete Confirmation Modal */}
-            <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle className="text-xl font-bold">Bu alanı silmek istediğinize emin misiniz?</DialogTitle>
-                        <DialogDescription className="pt-2">
-                            Devam ederseniz, bu alanla ilişkili <strong>TÜM verileri kalıcı olarak</strong> kaybedeceksiniz. Buna şunlar dahildir:
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="py-2">
-                        <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 text-sm text-gray-600 space-y-2 mb-4">
-                            <h4 className="font-semibold text-gray-900 mb-2">Kurs Verileri:</h4>
-                            <ul className="list-disc pl-5 space-y-1">
-                                <li>Bölümler ve dersler</li>
-                                <li>Tüm üyelerin tamamlanma ilerlemeleri</li>
-                                <li>Videolar ve dosyalar</li>
-                                <li>Yorumlar</li>
-                                <li>Alan üyeleri</li>
-                                <li>Alan ayarları: Kilit ekranları, konular, linkler vb.</li>
-                            </ul>
-                        </div>
-
-                        <p className="text-sm text-gray-600 mb-2">
-                            Onaylamak için lütfen kutucuğa <strong>SİLELİM</strong> yazın:
-                        </p>
-                        <Input
-                            value={deleteConfirmationText}
-                            onChange={(e) => setDeleteConfirmationText(e.target.value)}
-                            placeholder="SİLELİM"
-                            className="bg-white"
-                        />
-                    </div>
-
-                    <DialogFooter>
-                        <Button
-                            variant="outline"
-                            onClick={() => setIsDeleteModalOpen(false)}
-                            disabled={isDeleting}
-                        >
-                            İptal
-                        </Button>
-                        <Button
-                            variant="destructive"
-                            onClick={handleDeleteCourse}
-                            disabled={deleteConfirmationText !== 'SİLELİM' || isDeleting}
-                            className="bg-red-600 hover:bg-red-700"
-                        >
-                            {isDeleting ? (
-                                <>
-                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                    Siliniyor...
-                                </>
-                            ) : (
-                                'Onayla'
-                            )}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            <DeleteSpaceDialog
+                isOpen={isDeleteModalOpen}
+                onClose={() => setIsDeleteModalOpen(false)}
+                channelId={channel.id}
+                channelName={channel.name}
+            />
 
             {/* Builder Overlay */}
             {isBuilderOpen && (

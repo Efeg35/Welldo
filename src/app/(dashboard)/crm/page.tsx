@@ -75,7 +75,7 @@ export default async function CRMPage() {
             </aside>
 
             {/* Main Content */}
-            <div className="flex-1 p-6 space-y-6">
+            <div className="flex-1 p-6 space-y-6 overflow-y-auto">
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <h1 className="text-xl font-semibold">Kitleyi yönet</h1>

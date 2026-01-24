@@ -6,11 +6,12 @@ import { ChatInput } from "./chat-input";
 import { useEffect, useRef, useState } from "react";
 import { sendChannelMessage } from "@/actions/chat";
 import { createClient } from "@/lib/supabase/client";
-import { Search, MoveRight, MoreHorizontal, Lock, Users, Info, SquareActivity, X, BellOff, LogOut, PanelRight } from "lucide-react";
+import { Search, MoveRight, MoreHorizontal, Lock, Users, Info, SquareActivity, X, BellOff, LogOut, PanelRight, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DeleteSpaceDialog } from "./delete-space-dialog";
 
 interface ChatFeedProps {
     channel: Channel;
@@ -23,6 +24,7 @@ export function ChatFeed({ channel, user, initialMessages }: ChatFeedProps) {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
     const scrollRef = useRef<HTMLDivElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
@@ -134,21 +136,42 @@ export function ChatFeed({ channel, user, initialMessages }: ChatFeedProps) {
                                             <MoreHorizontal className="w-5 h-5" />
                                         </Button>
                                     </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end">
+                                    <DropdownMenuContent align="end" className="w-56">
                                         <DropdownMenuItem className="cursor-pointer">
                                             <BellOff className="w-4 h-4 mr-2" />
                                             <span>Bildirimleri Sustur</span>
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem className="cursor-pointer text-red-600 focus:text-red-700">
-                                            <LogOut className="w-4 h-4 mr-2" />
-                                            <span>Kanaldan Ayrıl</span>
-                                        </DropdownMenuItem>
+
+                                        {user?.role === 'instructor' || user?.role === 'admin' ? (
+                                            <>
+                                                <Separator className="my-1" />
+                                                <DropdownMenuItem
+                                                    className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                                                    onClick={() => setIsDeleteModalOpen(true)}
+                                                >
+                                                    <Trash2 className="w-4 h-4 mr-2" />
+                                                    <span>Alanı Sil</span>
+                                                </DropdownMenuItem>
+                                            </>
+                                        ) : (
+                                            <DropdownMenuItem className="cursor-pointer text-red-600 focus:text-red-700">
+                                                <LogOut className="w-4 h-4 mr-2" />
+                                                <span>Kanaldan Ayrıl</span>
+                                            </DropdownMenuItem>
+                                        )}
                                     </DropdownMenuContent>
                                 </DropdownMenu>
                             </div>
                         </>
                     )}
                 </div>
+
+                <DeleteSpaceDialog
+                    isOpen={isDeleteModalOpen}
+                    onClose={() => setIsDeleteModalOpen(false)}
+                    channelId={channel.id}
+                    channelName={channel.name}
+                />
 
                 {/* Messages List */}
                 <div className="flex-1 overflow-y-auto p-4" ref={scrollRef}>

@@ -53,6 +53,7 @@ export interface Message {
     channel_id: string;
     user_id: string;
     content: string;
+    attachments?: any[] | null;
     created_at: string;
     // Joined fields
     user?: Profile;
