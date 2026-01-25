@@ -23,7 +23,7 @@ interface CustomizeTabProps {
 export function CustomizeTab({ course, channel, onUpdate }: CustomizeTabProps) {
     const [name, setName] = React.useState(channel.name);
     const [category, setCategory] = React.useState(channel.category || 'Alanlar');
-    const [hideFromSidebar, setHideFromSidebar] = React.useState(channel.settings?.hide_from_sidebar || false);
+    const [hideMemberCount, setHideMemberCount] = React.useState(channel.settings?.hide_member_count || false);
     const [accessLevel, setAccessLevel] = React.useState<Channel['access_level'] | null>(channel.access_level || null);
     const [topics, setTopics] = React.useState<string[]>(course.topics || []);
     const [thumbnailUrl, setThumbnailUrl] = React.useState(course.thumbnail_url);
@@ -72,7 +72,7 @@ export function CustomizeTab({ course, channel, onUpdate }: CustomizeTabProps) {
                 name,
                 category,
                 access_level: accessLevel || undefined,
-                settings: { ...channel.settings, hide_from_sidebar: hideFromSidebar }
+                settings: { ...channel.settings, hide_member_count: hideMemberCount }
             });
 
             // Update Course
@@ -144,16 +144,6 @@ export function CustomizeTab({ course, channel, onUpdate }: CustomizeTabProps) {
                     </Select>
                 </div>
 
-                <div className="flex items-center justify-between py-2">
-                    <div className="space-y-0.5">
-                        <Label className="text-sm font-semibold text-gray-700">Yan menüde gizle</Label>
-                        <p className="text-xs text-gray-500">Bu alanı yan menüden gizler, ancak üyeler hala erişebilir.</p>
-                    </div>
-                    <Switch
-                        checked={hideFromSidebar}
-                        onCheckedChange={setHideFromSidebar}
-                    />
-                </div>
             </section>
 
             {/* Access Settings */}
@@ -232,6 +222,16 @@ export function CustomizeTab({ course, channel, onUpdate }: CustomizeTabProps) {
                             </div>
                         </div>
                     </RadioGroup>
+
+                    <div className="pt-8 border-t border-gray-100">
+                        <h4 className="text-lg font-bold text-gray-900 mb-4">İzinler</h4>
+                        <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                                <Label className="text-base font-normal text-gray-900">Üye sayısını gizle</Label>
+                            </div>
+                            <Switch checked={hideMemberCount} onCheckedChange={setHideMemberCount} />
+                        </div>
+                    </div>
                 </div>
             </section>
 

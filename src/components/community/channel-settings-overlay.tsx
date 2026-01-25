@@ -63,11 +63,15 @@ export function ChannelSettingsOverlay({ channel, members = [], isAdmin = false,
     const [isUploading, setIsUploading] = useState(false);
 
     // Permissions State
-    const [allowMembersToInvite, setAllowMembersToInvite] = useState(settings.allow_members_to_invite !== false); // Default true
-    const [allowMembersToCreatePosts, setAllowMembersToCreatePosts] = useState(settings.allow_members_to_create_posts !== false); // Default true
-    const [allowPostTitle, setAllowPostTitle] = useState(settings.allow_post_title !== false); // Default true
+    const [allowMembersToInvite, setAllowMembersToInvite] = useState(settings.allow_members_to_invite === true); // Default false for all types
+    const [allowMembersToCreatePosts, setAllowMembersToCreatePosts] = useState(
+        channel.type === 'event'
+            ? (settings.allow_members_to_create_posts === true)
+            : (settings.allow_members_to_create_posts !== false)
+    ); const [allowPostTitle, setAllowPostTitle] = useState(settings.allow_post_title !== false); // Default true
     const [allowCoverImages, setAllowCoverImages] = useState(settings.allow_cover_images !== false); // Default true
     const [hideMemberCount, setHideMemberCount] = useState(settings.hide_member_count || false); // Default false
+    const [hideFromFeatured, setHideFromFeatured] = useState(settings.hide_from_featured || false); // Default false for events
 
     // Prevent body scroll when open
     useEffect(() => {
@@ -136,7 +140,8 @@ export function ChannelSettingsOverlay({ channel, members = [], isAdmin = false,
                     allow_members_to_create_posts: allowMembersToCreatePosts,
                     allow_post_title: allowPostTitle,
                     allow_cover_images: allowCoverImages,
-                    hide_member_count: hideMemberCount
+                    hide_member_count: hideMemberCount,
+                    hide_from_featured: hideFromFeatured
                 }
             });
             toast.success("Ayarlar kaydedildi");
@@ -310,43 +315,77 @@ export function ChannelSettingsOverlay({ channel, members = [], isAdmin = false,
 
                             {/* Permissions */}
                             <section className="space-y-6">
-                                <h3 className="text-xl font-bold text-gray-900">İzinler & Etiketler</h3>
+                                <h3 className="text-xl font-bold text-gray-900">İzinler</h3>
 
                                 <div className="space-y-5">
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label className="text-base font-semibold text-gray-900">Üyelerin başkalarını eklemesine izin ver</Label>
-                                        </div>
-                                        <Switch checked={allowMembersToInvite} onCheckedChange={setAllowMembersToInvite} />
-                                    </div>
+                                    {channel.type === 'event' ? (
+                                        <>
+                                            <div className="flex items-center justify-between">
+                                                <div className="space-y-0.5">
+                                                    <Label className="text-base font-semibold text-gray-900">Üyelerin başkalarını eklemesine izin ver</Label>
+                                                </div>
+                                                <Switch checked={allowMembersToInvite} onCheckedChange={setAllowMembersToInvite} />
+                                            </div>
 
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label className="text-base font-semibold text-gray-900">Üyelerin gönderi oluşturmasına izin ver</Label>
-                                        </div>
-                                        <Switch checked={allowMembersToCreatePosts} onCheckedChange={setAllowMembersToCreatePosts} />
-                                    </div>
+                                            <div className="flex items-center justify-between">
+                                                <div className="space-y-0.5">
+                                                    <Label className="text-base font-semibold text-gray-900">Tüm gönderileri öne çıkan alanlardan gizle</Label>
+                                                </div>
+                                                <Switch checked={hideFromFeatured} onCheckedChange={setHideFromFeatured} />
+                                            </div>
 
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label className="text-base font-semibold text-gray-900">Gönderi başlığına izin ver</Label>
-                                        </div>
-                                        <Switch checked={allowPostTitle} onCheckedChange={setAllowPostTitle} />
-                                    </div>
+                                            <div className="flex items-center justify-between">
+                                                <div className="space-y-0.5">
+                                                    <Label className="text-base font-semibold text-gray-900">Üyelerin etkinlik oluşturmasına izin ver</Label>
+                                                </div>
+                                                <Switch checked={allowMembersToCreatePosts} onCheckedChange={setAllowMembersToCreatePosts} />
+                                            </div>
 
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label className="text-base font-semibold text-gray-900">Kapak görsellerine izin ver</Label>
-                                        </div>
-                                        <Switch checked={allowCoverImages} onCheckedChange={setAllowCoverImages} />
-                                    </div>
+                                            <div className="flex items-center justify-between">
+                                                <div className="space-y-0.5">
+                                                    <Label className="text-base font-semibold text-gray-900">Üye sayısını gizle</Label>
+                                                </div>
+                                                <Switch checked={hideMemberCount} onCheckedChange={setHideMemberCount} />
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div className="flex items-center justify-between">
+                                                <div className="space-y-0.5">
+                                                    <Label className="text-base font-semibold text-gray-900">Üyelerin başkalarını eklemesine izin ver</Label>
+                                                </div>
+                                                <Switch checked={allowMembersToInvite} onCheckedChange={setAllowMembersToInvite} />
+                                            </div>
 
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label className="text-base font-semibold text-gray-900">Üye sayısını gizle</Label>
-                                        </div>
-                                        <Switch checked={hideMemberCount} onCheckedChange={setHideMemberCount} />
-                                    </div>
+                                            <div className="flex items-center justify-between">
+                                                <div className="space-y-0.5">
+                                                    <Label className="text-base font-semibold text-gray-900">Üyelerin gönderi oluşturmasına izin ver</Label>
+                                                </div>
+                                                <Switch checked={allowMembersToCreatePosts} onCheckedChange={setAllowMembersToCreatePosts} />
+                                            </div>
+
+                                            <div className="flex items-center justify-between">
+                                                <div className="space-y-0.5">
+                                                    <Label className="text-base font-semibold text-gray-900">Gönderi başlığına izin ver</Label>
+                                                </div>
+                                                <Switch checked={allowPostTitle} onCheckedChange={setAllowPostTitle} />
+                                            </div>
+
+                                            <div className="flex items-center justify-between">
+                                                <div className="space-y-0.5">
+                                                    <Label className="text-base font-semibold text-gray-900">Kapak görsellerine izin ver</Label>
+                                                </div>
+                                                <Switch checked={allowCoverImages} onCheckedChange={setAllowCoverImages} />
+                                            </div>
+
+                                            <div className="flex items-center justify-between">
+                                                <div className="space-y-0.5">
+                                                    <Label className="text-base font-semibold text-gray-900">Üye sayısını gizle</Label>
+                                                </div>
+                                                <Switch checked={hideMemberCount} onCheckedChange={setHideMemberCount} />
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                             </section>
 

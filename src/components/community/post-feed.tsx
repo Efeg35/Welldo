@@ -15,6 +15,7 @@ import {
 import { DeleteSpaceDialog } from "@/components/community/delete-space-dialog";
 import { ChannelSettingsOverlay } from "@/components/community/channel-settings-overlay";
 
+import { PostDetailModal } from "@/components/community/post-detail-modal";
 import { Channel, Profile, Post } from "@/types";
 
 interface PostFeedProps {
@@ -32,6 +33,8 @@ import { cn } from "@/lib/utils";
 export function PostFeed({ channel, user, posts, communityId, channels = [], members = [] }: PostFeedProps) {
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+    const [isPostDetailOpen, setIsPostDetailOpen] = useState(false);
     const isInstructor = user?.role === 'instructor' || user?.role === 'admin';
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -238,12 +241,23 @@ export function PostFeed({ channel, user, posts, communityId, channels = [], mem
                                         key={post.id}
                                         post={post}
                                         currentUserId={user?.id}
+                                        onClick={(p) => {
+                                            setSelectedPost(p);
+                                            setIsPostDetailOpen(true);
+                                        }}
                                     />
                                 ))}
                             </div>
                         )}
                     </div>
                 </div>
+
+                <PostDetailModal
+                    post={selectedPost}
+                    user={user}
+                    isOpen={isPostDetailOpen}
+                    onClose={() => setIsPostDetailOpen(false)}
+                />
             </div>
         </div>
     );

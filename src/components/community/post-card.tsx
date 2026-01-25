@@ -35,6 +35,7 @@ import {
 interface PostCardProps {
     post: Post;
     currentUserId: string | undefined;
+    onClick?: (post: Post) => void;
 }
 
 // Helper to extract YouTube ID
@@ -44,7 +45,7 @@ function getYoutubeId(url: string) {
     return (match && match[2].length === 11) ? match[2] : null;
 }
 
-export function PostCard({ post, currentUserId }: PostCardProps) {
+export function PostCard({ post, currentUserId, onClick }: PostCardProps) {
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
@@ -169,7 +170,16 @@ export function PostCard({ post, currentUserId }: PostCardProps) {
                 </DropdownMenu>
             </div>
 
-            <Link href={`/community/post/${post.id}`} className="block hover:bg-muted/30 transition-colors -mx-6 px-6 py-2 cursor-pointer">
+            <Link
+                href={`/community/post/${post.id}`}
+                className="block hover:bg-muted/30 transition-colors -mx-6 px-6 py-2 cursor-pointer"
+                onClick={(e) => {
+                    if (onClick) {
+                        e.preventDefault();
+                        onClick(post);
+                    }
+                }}
+            >
                 {post.title && <h3 className="font-bold text-lg mb-2">{post.title}</h3>}
                 <div className="text-muted-foreground prose prose-sm dark:prose-invert max-w-none line-clamp-4">
                     <Markdown>{post.content}</Markdown>

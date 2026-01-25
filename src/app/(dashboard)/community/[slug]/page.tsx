@@ -113,7 +113,8 @@ export default async function ChannelPage({ params, searchParams }: { params: { 
     if (channel.type === 'event') {
         if (!hasAccess) return <SpaceLockScreen channel={channel} />;
         const events = await getEvents(channel.id, 'upcoming');
-        return <EventFeed channel={channel} user={profile} initialEvents={events} />;
+        const members = await getChannelMembers(channel.id);
+        return <EventFeed channel={channel} user={profile} initialEvents={events} members={members as unknown as Profile[]} />;
     }
 
     if (channel.type === 'chat') {
