@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Link as LinkIcon, Plus, Trash2, ExternalLink } from "lucide-react";
+import { Link as LinkIcon, Plus, Trash2, ExternalLink, MoreHorizontal, Edit2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { CreateLinkModal } from "./create-link-modal";
+import { EditLinkModal } from "./edit-link-modal";
 import { deleteLink, getLinks } from "@/actions/links";
 import { toast } from "sonner";
 import {
@@ -12,7 +13,6 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
 
 interface LinkItem {
     id: string;
@@ -25,23 +25,34 @@ interface LinkItem {
 interface SidebarLinksSectionProps {
     communityId: string;
     canEdit: boolean;
+    initialLinks?: LinkItem[];
 }
 
-export function SidebarLinksSection({ communityId, canEdit }: SidebarLinksSectionProps) {
-    const [links, setLinks] = useState<LinkItem[]>([]);
+export function SidebarLinksSection({ communityId, canEdit, initialLinks = [] }: SidebarLinksSectionProps) {
+    const [links, setLinks] = useState<LinkItem[]>(initialLinks);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [editingLink, setEditingLink] = useState<LinkItem | null>(null);
     const supabase = createClient();
 
-    // Initial Fetch
+    // Sync state with props when server refetches (revalidatePath)
+    useEffect(() => {
+        if (initialLinks.length > 0) {
+            setLinks(initialLinks);
+        }
+        // If initialLinks is empty, we might still want to fetch or just trust it.
+        // Actually, for better UX, if communityId changes, we should 
+        // probably trust the server provided initialLinks.
+    }, [initialLinks]);
+
+    // Initial Fetch (as fallback or if not provided)
     useEffect(() => {
         const fetchLinks = async () => {
-            if (!communityId) return;
+            if (!communityId || initialLinks.length > 0) return;
             const data = await getLinks(communityId);
             if (data) setLinks(data);
         };
         fetchLinks();
-    }, [communityId]);
-
+    }, [communityId, initialLinks.length]);
     // Realtime Subscription
     useEffect(() => {
         if (!communityId) return;
@@ -57,9 +68,6 @@ export function SidebarLinksSection({ communityId, canEdit }: SidebarLinksSectio
                     filter: `community_id=eq.${communityId}`
                 },
                 (payload) => {
-                    // Refresh functionality could be optimized to strict state updates, 
-                    // but re-fetching is safer for consistency with ordering etc.
-                    // Or simpler state manipulation:
                     if (payload.eventType === 'INSERT') {
                         setLinks(prev => [...prev, payload.new as LinkItem]);
                     } else if (payload.eventType === 'DELETE') {
@@ -76,10 +84,7 @@ export function SidebarLinksSection({ communityId, canEdit }: SidebarLinksSectio
         };
     }, [communityId, supabase]);
 
-    const handleDelete = async (id: string, e: React.MouseEvent) => {
-        e.preventDefault(); // Prevent link click
-        e.stopPropagation();
-
+    const handleDelete = async (id: string) => {
         try {
             await deleteLink(id);
             toast.success("Link silindi");
@@ -92,14 +97,14 @@ export function SidebarLinksSection({ communityId, canEdit }: SidebarLinksSectio
 
     return (
         <div className="mt-4">
-            <div className="flex items-center justify-between px-3 mb-2">
+            <div className="flex items-center justify-between px-3 mb-2 group/links">
                 <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
                     Bağlantılar
                 </h3>
                 {canEdit && (
                     <button
                         onClick={() => setIsCreateModalOpen(true)}
-                        className="text-gray-400 hover:text-white transition-colors cursor-pointer"
+                        className="text-gray-400 hover:text-white transition-colors cursor-pointer opacity-0 group-hover/links:opacity-100"
                         title="Link Ekle"
                     >
                         <Plus className="w-4 h-4" />
@@ -118,21 +123,28 @@ export function SidebarLinksSection({ communityId, canEdit }: SidebarLinksSectio
                         >
                             <LinkIcon className="w-4 h-4 shrink-0" />
                             <span className="truncate">{link.label}</span>
-                            <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-50 ml-auto" />
+                            <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-50 ml-auto mr-6" />
                         </a>
 
                         {canEdit && (
                             <div className="absolute right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
-                                        <div className="p-1 hover:bg-white/10 rounded cursor-pointer text-gray-400 hover:text-red-400">
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                        </div>
+                                        <button className="p-1 hover:bg-white/10 rounded cursor-pointer text-gray-400 hover:text-white outline-none">
+                                            <MoreHorizontal className="w-4 h-4" />
+                                        </button>
                                     </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end">
+                                    <DropdownMenuContent align="end" className="w-40">
                                         <DropdownMenuItem
-                                            className="text-red-600 focus:text-red-600 focus:bg-red-50 cursor-pointer"
-                                            onClick={(e) => handleDelete(link.id, e as any)}
+                                            className="cursor-pointer"
+                                            onClick={() => setEditingLink(link)}
+                                        >
+                                            <Edit2 className="w-4 h-4 mr-2" />
+                                            Düzenle
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                            className="text-red-500 focus:text-red-500 focus:bg-red-50 cursor-pointer"
+                                            onClick={() => handleDelete(link.id)}
                                         >
                                             <Trash2 className="w-4 h-4 mr-2" />
                                             Sil
@@ -149,6 +161,12 @@ export function SidebarLinksSection({ communityId, canEdit }: SidebarLinksSectio
                 isOpen={isCreateModalOpen}
                 onClose={() => setIsCreateModalOpen(false)}
                 communityId={communityId}
+            />
+
+            <EditLinkModal
+                isOpen={!!editingLink}
+                onClose={() => setEditingLink(null)}
+                link={editingLink}
             />
         </div>
     );

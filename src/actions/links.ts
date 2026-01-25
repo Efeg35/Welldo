@@ -54,3 +54,20 @@ export async function getLinks(communityId: string) {
     if (error) return [];
     return data;
 }
+
+export async function updateLink(linkId: string, label: string, url: string) {
+    const supabase = await createClient();
+
+    const { error } = await supabase
+        .from('community_links')
+        .update({ label, url })
+        .eq('id', linkId);
+
+    if (error) {
+        console.error("Link update error:", error);
+        throw new Error("Link güncellenemedi");
+    }
+
+    revalidatePath(`/community/[slug]`, 'layout');
+    revalidatePath('/', 'layout');
+}

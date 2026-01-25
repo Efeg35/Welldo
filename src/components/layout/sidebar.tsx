@@ -183,7 +183,6 @@ function SortableGroupItem({
             dndType: 'GROUP',
             group
         },
-        disabled: group.id === 'ungrouped'
     });
 
     const style = {
@@ -306,6 +305,10 @@ export function Sidebar({
 
         // 4. Sort Groups
         let sorted = Object.values(groupsMap).sort((a, b) => a.position - b.position);
+
+        // Filter out empty ungrouped section (since we migrated to real groups, 
+        // or just want to confirm it's not shown if empty)
+        sorted = sorted.filter(g => g.id !== 'ungrouped' || g.spaces.length > 0);
 
         // Sort spaces within groups
         sorted.forEach(g => {
@@ -603,6 +606,7 @@ export function Sidebar({
                 <SidebarLinksSection
                     communityId={spaces?.[0]?.community_id || ""}
                     canEdit={canCreateSpace || false}
+                    initialLinks={links}
                 />
             </nav>
 
