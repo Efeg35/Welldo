@@ -8,6 +8,8 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { UserNav } from "@/components/layout/user-nav";
 import { DirectMessagePopover } from "@/components/dm/dm-popover";
+import { NotificationsPopover } from "@/components/layout/notifications-popover";
+import { BookmarksPopover } from "@/components/layout/bookmarks-popover";
 
 const navigation = [
     { href: "/dashboard", label: "Ana Sayfa" },
@@ -66,10 +68,9 @@ export function Header() {
                         <span className="hidden lg:inline">Ara</span>
                     </Button>
 
-                    <Button variant="ghost" size="icon" className="relative rounded-full">
-                        <Bell className="h-5 w-5" />
-                        <span className="absolute 1.5 1.5 flex h-2 w-2 rounded-full bg-red-600 top-2 right-2"></span>
-                    </Button>
+                    <BookmarksPopover />
+
+                    <NotificationsPopover />
 
                     <DirectMessagePopover />
 

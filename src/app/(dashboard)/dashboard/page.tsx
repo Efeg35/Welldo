@@ -5,7 +5,7 @@ import {
     MoreHorizontal,
     MessageSquare
 } from "lucide-react";
-import { getPosts } from "@/actions/community";
+import { getPosts, getSidebarData } from "@/actions/community";
 import { CreatePost } from "@/components/community/create-post";
 import { PostCard } from "@/components/community/post-card";
 
@@ -44,7 +44,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
             .limit(1)
             .single();
         if (ownedCommunity) communityId = ownedCommunity.id;
+        if (ownedCommunity) communityId = ownedCommunity.id;
     }
+
+    // Fetch channels for CreatePost selector
+    const { spaces } = await getSidebarData(communityId);
+    // Filter out restricted channels if needed, but getSidebarData handles visibility
+    const availableChannels = spaces;
 
     return (
         <div className="flex flex-col h-full bg-[#FAFAFA]"> {/* Distinct light gray background */}
@@ -57,7 +63,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
                         <div className="flex items-center gap-3">
                             <FeedFilter />
 
-                            <CreatePost user={user} communityId={communityId}>
+                            <CreatePost user={user} communityId={communityId} channels={availableChannels}>
                                 <Button size="sm" className="bg-[#1c1c1c] hover:bg-black text-white rounded-full px-5 font-medium shadow-sm transition-all hover:scale-105 active:scale-95 h-9">
                                     Yeni gönderi
                                 </Button>
@@ -81,7 +87,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
                                         Burası ana akışın. Yeni gönderileri burada göreceksin.
                                     </p>
                                     <div className="pt-4">
-                                        <CreatePost user={user} communityId={communityId}>
+                                        <CreatePost user={user} communityId={communityId} channels={availableChannels}>
                                             <Button size="lg" className="bg-[#1c1c1c] hover:bg-black text-white rounded-full px-8 font-medium shadow-md transition-all hover:shadow-lg">
                                                 İlk gönderiyi oluştur
                                             </Button>

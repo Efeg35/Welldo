@@ -20,6 +20,9 @@ export async function getPosts(channelId?: string, sort: string = 'latest') {
             post_likes (
                 user_id
             ),
+            bookmarks (
+                user_id
+            ),
             comments (count)
         `);
 
@@ -126,6 +129,10 @@ export async function createPost(
         throw new Error("Community context required to create a post");
     }
 
+    // Sanitize IDs - empty strings should be null for UUID columns
+    const sanitizedChannelId = channelId && channelId.trim() !== "" ? channelId : null;
+    const sanitizedCommunityId = targetCommunityId && targetCommunityId.trim() !== "" ? (targetCommunityId as string) : null;
+
     const { error } = await supabase
         .from('posts')
         .insert({
@@ -133,13 +140,13 @@ export async function createPost(
             content,
             title: title || null,
             image_url: imageUrl || null,
-            channel_id: channelId || null,
-            community_id: targetCommunityId
+            channel_id: sanitizedChannelId,
+            community_id: sanitizedCommunityId
         });
 
     if (error) {
-        console.error("Error creating post:", error);
-        throw new Error("Failed to create post");
+        console.error("Error creating post:", JSON.stringify(error, null, 2));
+        throw new Error(`Gönderi oluşturulamadı: ${error.message} (${error.code})`);
     }
 
     revalidatePath('/community');
@@ -176,9 +183,49 @@ export async function toggleLike(postId: string) {
                 post_id: postId,
                 user_id: user.id,
             });
+
+        // Create Notification
+        const { data: post } = await supabase
+            .from('posts')
+            .select('user_id')
+            .eq('id', postId)
+            .single();
+
+        if (post && post.user_id !== user.id) {
+            await supabase.from('notifications').insert({
+                user_id: post.user_id,
+                actor_id: user.id,
+                type: 'like',
+                resource_id: postId,
+                resource_type: 'post'
+            });
+        }
     }
 
     revalidatePath('/community');
+}
+
+export async function toggleBookmark(postId: string) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) throw new Error("Unauthorized");
+
+    const { data: existing } = await supabase
+        .from('bookmarks')
+        .select()
+        .eq('post_id', postId)
+        .eq('user_id', user.id)
+        .single();
+
+    if (existing) {
+        await supabase.from('bookmarks').delete().eq('post_id', postId).eq('user_id', user.id);
+    } else {
+        await supabase.from('bookmarks').insert({ post_id: postId, user_id: user.id });
+    }
+
+    revalidatePath('/community');
+    revalidatePath(`/community/post/${postId}`);
 }
 
 export async function getSidebarData(communityId?: string) {
@@ -241,10 +288,82 @@ export async function getSidebarData(communityId?: string) {
         .eq('community_id', targetedCommunityId)
         .order('order_index', { ascending: true });
 
+    // Fetch unread counts
+    let spacesWithCounts = spaces;
+    if (user && spaces.length > 0) {
+        // Get user's last read time for each channel
+        const { data: reads } = await supabase
+            .from('channel_reads')
+            .select('channel_id, last_read_at')
+            .eq('user_id', user.id);
+
+        const readMap = new Map((reads || []).map(r => [r.channel_id, r.last_read_at]));
+
+        // Calculate unread counts
+        // Note: For MVP we will do individual queries or a grouped query. 
+        // Grouped query is better perf.
+        const channelIds = spaces.map(s => s.id);
+
+        // Count posts after last read
+        // Ideally we would do this in a single complex query or view, 
+        // but for now let's try a simplified approach: 
+        // We will assume "unread" means new POSTS since last visit.
+        // For strict unread count we'd need:
+        // SELECT channel_id, COUNT(*) FROM posts WHERE created_at > (SELECT last_read_at FROM channel_reads WHERE ...) GROUP BY channel_id
+
+        // Let's do a loop for now or a smart query? user might have many channels.
+        // Better: client-side? No, sidebar is server fetched mostly.
+
+        // Let's fetch all relevant posts created recently (e.g. last 30 days) and count in memory? 
+        // Or specific queries.
+
+        // Let's go with a simplified approach: default 'unread' is boolean if we can't get exact count easily?
+        // User asked for "number".
+
+        // Let's iterate for now (limit 20 channels typically visible).
+        spacesWithCounts = await Promise.all(spaces.map(async (space) => {
+            const lastRead = readMap.get(space.id) || '2000-01-01'; // Default long ago
+
+            // Count posts
+            const { count } = await supabase
+                .from('posts')
+                .select('*', { count: 'exact', head: true })
+                .eq('channel_id', space.id)
+                .gt('created_at', lastRead);
+
+            return {
+                ...space,
+                unread_count: count || 0
+            };
+        }));
+    }
+
     return {
-        spaces: spaces,
+        spaces: spacesWithCounts,
         links: links || []
     };
+}
+
+export async function markChannelAsRead(channelId: string) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) return;
+
+    // Upsert channel read
+    const { error } = await supabase
+        .from('channel_reads')
+        .upsert({
+            user_id: user.id,
+            channel_id: channelId,
+            last_read_at: new Date().toISOString()
+        }, {
+            onConflict: 'user_id, channel_id'
+        });
+
+    if (error) {
+        console.error("Error marking channel as read", error);
+    }
 }
 
 export async function createComment(postId: string, content: string) {
@@ -266,6 +385,23 @@ export async function createComment(postId: string, content: string) {
     if (error) {
         console.error("Error creating comment:", error);
         throw new Error("Failed to create comment");
+    }
+
+    // Create Notification
+    const { data: post } = await supabase
+        .from('posts')
+        .select('user_id')
+        .eq('id', postId)
+        .single();
+
+    if (post && post.user_id !== user.id) {
+        await supabase.from('notifications').insert({
+            user_id: post.user_id,
+            actor_id: user.id,
+            type: 'comment',
+            resource_id: postId,
+            resource_type: 'post'
+        });
     }
 
     revalidatePath(`/community/post/${postId}`);
@@ -588,4 +724,159 @@ export async function getSpaceMembers(channelId: string) {
 
     if (error) return [];
     return data.map(m => m.profile).filter(Boolean);
+}
+
+export async function editPost(postId: string, title: string, content: string) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) throw new Error("Unauthorized");
+
+    const { error } = await supabase
+        .from('posts')
+        .update({
+            title,
+            content,
+            updated_at: new Date().toISOString()
+        })
+        .eq('id', postId)
+        .eq('user_id', user.id); // Security: only owner can edit
+
+    if (error) {
+        console.error("Error editing post:", error);
+        throw new Error("Failed to edit post");
+    }
+
+    revalidatePath('/community');
+    revalidatePath(`/community/post/${postId}`);
+}
+
+export async function deletePost(postId: string) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) throw new Error("Unauthorized");
+
+    // Check if owner or staff
+    const { data: post } = await supabase
+        .from('posts')
+        .select('user_id, community_id')
+        .eq('id', postId)
+        .single();
+
+    if (!post) throw new Error("Post not found");
+
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+    const isStaff = profile?.role === 'instructor' || profile?.role === 'admin';
+
+    if (post.user_id !== user.id && !isStaff) {
+        throw new Error("Unauthorized to delete this post");
+    }
+
+    const { error } = await supabase
+        .from('posts')
+        .delete()
+        .eq('id', postId);
+
+    if (error) {
+        console.error("Error deleting post:", error);
+        throw new Error("Failed to delete post");
+    }
+
+    revalidatePath('/community');
+}
+
+export async function getPost(postId: string) {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+        .from('posts')
+        .select(`
+            *,
+            profiles:profiles!posts_user_id_fkey (
+                id,
+                full_name,
+                avatar_url,
+                role
+            ),
+            post_likes (
+                user_id
+            ),
+            bookmarks (
+                user_id
+            ),
+            comments (
+                *,
+                profiles (
+                    id,
+                    full_name,
+                    avatar_url,
+                    role
+                )
+            )
+        `)
+        .eq('id', postId)
+        .single();
+
+    if (error) {
+        console.error("Error fetching post:", error);
+        return null;
+    }
+
+    return {
+        ...data,
+        _count: {
+            post_likes: data.post_likes?.length || 0,
+            comments: data.comments?.length || 0
+        }
+    };
+}
+
+export async function getBookmarkedPosts() {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) return [];
+
+    const { data, error } = await supabase
+        .from('bookmarks')
+        .select(`
+            post_id,
+            posts:posts!bookmarks_post_id_fkey (
+                *,
+                profiles:profiles!posts_user_id_fkey (
+                    id,
+                    full_name,
+                    avatar_url,
+                    role
+                ),
+                post_likes ( user_id ),
+                comments ( count ),
+                channel_id (
+                  id,
+                  name,
+                  slug
+                )
+            )
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error("Error fetching bookmarks:", error);
+        return [];
+    }
+
+    // Transform to flatten the structure slightly if needed, or return as is
+    return data.map((item: any) => {
+        const post = item.posts;
+        return {
+            ...post,
+            channel_name: post.channel_id?.name || 'Genel',
+            _count: {
+                post_likes: post.post_likes?.length || 0,
+                comments: post.comments?.[0]?.count || 0
+            }
+        };
+    });
 }

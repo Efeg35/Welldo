@@ -21,9 +21,10 @@ interface PostFeedProps {
     user: Profile;
     posts: Post[];
     communityId: string;
+    channels?: Channel[];
 }
 
-export function PostFeed({ channel, user, posts, communityId }: PostFeedProps) {
+export function PostFeed({ channel, user, posts, communityId, channels = [] }: PostFeedProps) {
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const isInstructor = user?.role === 'instructor' || user?.role === 'admin';
 
@@ -41,7 +42,7 @@ export function PostFeed({ channel, user, posts, communityId }: PostFeedProps) {
                         <div className="flex items-center gap-3">
                             <FeedFilter />
 
-                            <CreatePost user={user} communityId={communityId} channelId={channel.id}>
+                            <CreatePost user={user} communityId={communityId} channelId={channel.id} channels={channels}>
                                 <Button size="sm" className="bg-[#1c1c1c] hover:bg-black text-white rounded-full px-5 font-medium shadow-sm transition-all hover:scale-105 active:scale-95 h-9 cursor-pointer">
                                     Yeni gönderi
                                 </Button>
@@ -93,9 +94,9 @@ export function PostFeed({ channel, user, posts, communityId }: PostFeedProps) {
                                     </p>
 
                                     <div className="pt-2">
-                                        <CreatePost user={user} communityId={communityId} channelId={channel.id}>
-                                            <Button size="lg" className="bg-[#1c1c1c] hover:bg-black text-white rounded-full px-8 py-6 text-base font-medium shadow-md transition-all hover:shadow-lg cursor-pointer">
-                                                Bir gönderi oluştur
+                                        <CreatePost user={user} communityId={communityId} channelId={channel.id} channels={channels}>
+                                            <Button size="lg" className="bg-[#1c1c1c] hover:bg-black text-white rounded-full px-8 h-12 text-base font-semibold shadow-md transition-all hover:shadow-lg cursor-pointer">
+                                                İlk gönderiyi sen paylaş
                                             </Button>
                                         </CreatePost>
                                     </div>
@@ -103,6 +104,7 @@ export function PostFeed({ channel, user, posts, communityId }: PostFeedProps) {
                             </div>
                         ) : (
                             <div className="space-y-6 max-w-3xl mx-auto">
+                                <CreatePost user={user} communityId={communityId} channelId={channel.id} channels={channels} />
                                 {posts.map((post: any) => (
                                     <PostCard
                                         key={post.id}

@@ -176,7 +176,12 @@ export function Sidebar({
                                             )}
                                         >
                                             <Icon className="w-4 h-4 shrink-0" />
-                                            <span className="truncate">{space.name}</span>
+                                            <span className="truncate flex-1">{space.name}</span>
+                                            {space.unread_count > 0 && (
+                                                <span className="bg-muted-foreground/20 text-muted-foreground text-[10px] font-medium px-1.5 py-0.5 rounded-md min-w-[20px] text-center">
+                                                    {space.unread_count > 99 ? '99+' : space.unread_count}
+                                                </span>
+                                            )}
                                         </Link>
                                     );
                                 })}

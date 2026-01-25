@@ -108,6 +108,7 @@ export interface Post {
     updated_at: string;
     // Joined fields
     post_likes?: { user_id: string }[];
+    bookmarks?: { user_id: string }[];
     _count?: { post_likes: number; comments: number };
     comments?: { count: number }[];
     profiles?: Profile;

@@ -1,7 +1,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { notFound, redirect } from "next/navigation";
-import { getPosts, getChannelBySlug } from "@/actions/community";
+import { getPosts, getChannelBySlug, getSidebarData } from "@/actions/community";
 import { getEvents } from "@/actions/events";
 import { PostFeed } from "@/components/community/post-feed";
 import { EventFeed } from "@/components/community/event-feed";
@@ -51,6 +51,9 @@ export default async function ChannelPage({ params, searchParams }: { params: { 
     if (!channel) {
         return notFound();
     }
+
+    // Mark as read
+    await import("@/actions/community").then(mod => mod.markChannelAsRead(channel.id));
 
     // 3. Fetch Community Details to check ownership
     const { data: community } = await supabase
@@ -140,5 +143,10 @@ export default async function ChannelPage({ params, searchParams }: { params: { 
     const posts = await getPosts(channel.id, sort);
     const communityId = channel.community_id;
 
-    return <PostFeed channel={channel} user={profile} posts={posts} communityId={communityId} />;
+    // Fetch available channels for selector in CreatePost
+    // We already have access logic in getSidebarData, let's reuse it or fetch simple list.
+    // Ideally we want same list as sidebar.
+    const { spaces } = await getSidebarData(communityId);
+
+    return <PostFeed channel={channel} user={profile} posts={posts} communityId={communityId} channels={spaces} />;
 }
