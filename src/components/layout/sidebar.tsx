@@ -337,6 +337,8 @@ export function Sidebar({
         setIsCreateSpaceOpen(true);
     };
 
+    const [originalGroupId, setOriginalGroupId] = useState<string | null>(null);
+
     const handleDragStart = (event: DragStartEvent) => {
         const { active } = event;
         const { id } = active;
@@ -354,6 +356,7 @@ export function Sidebar({
             const space = group.spaces.find((s) => s.id === id);
             if (space) {
                 setActiveItem({ dndType: 'SPACE', ...space });
+                setOriginalGroupId(group.id);
                 return;
             }
         }
@@ -434,6 +437,7 @@ export function Sidebar({
 
         setActiveId(null);
         setActiveItem(null);
+        // Don't clear originalGroupId yet, used below
 
         if (!over) return;
 
@@ -472,9 +476,14 @@ export function Sidebar({
             if (activeGroupId === overGroupId) {
                 // Same group reorder (or moved into this group by DragOver)
                 const oldIndex = activeGroup.spaces.findIndex((s) => s.id === activeId);
-                const newIndex = activeGroup.spaces.findIndex((s) => s.id === overId);
+                let newIndex = activeGroup.spaces.findIndex((s) => s.id === overId);
 
-                const originalGroupId = active.data.current?.parentId;
+                // If overId is the group itself (e.g. dropped on header), it means no specific sibling order target.
+                // We keep it where handleDragOver put it (or default to oldIndex).
+                if (newIndex === -1 && overId === activeGroupId) {
+                    newIndex = oldIndex;
+                }
+
                 const currentGroupId = activeGroupId;
                 const hasChangedGroup = originalGroupId !== currentGroupId;
 
@@ -500,10 +509,7 @@ export function Sidebar({
                     }
                 }
             } else {
-                // Moved to different group (finalization)
-                // We assume state is already updated by dragOver since it handles cross-group movement optimistically.
-                // We just need to persist the current order of the destination group.
-
+                // Moved to different group (finalization - rare catch-all if DragOver didn't handle it)
                 const destGroup = orderedGroups.find(g => g.id === overGroupId);
                 if (destGroup) {
                     const updates = destGroup.spaces.map((s, idx) => ({
@@ -518,6 +524,8 @@ export function Sidebar({
                 }
             }
         }
+
+        setOriginalGroupId(null);
     };
 
     const dropAnimation: DropAnimation = {
