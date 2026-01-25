@@ -46,6 +46,22 @@ export interface Channel {
     access_level: 'open' | 'private' | 'secret';
     settings: Record<string, any> | null;
     created_at: string;
+    // New fields
+    group_id?: string | null;
+    // Joined fields
+    group?: ChannelGroup | null;
+}
+
+export interface ChannelGroup {
+    id: string;
+    community_id: string;
+    name: string;
+    slug: string;
+    position: number;
+    settings: Record<string, any> | null;
+    created_at: string;
+    // Joined
+    channels?: Channel[];
 }
 
 export interface Message {

@@ -12,6 +12,7 @@ interface DashboardLayoutProps {
     showSecondaryNav?: boolean;
     communityName?: string;
     spaces?: any[];
+    groups?: any[]; // Added groups
     links?: any[];
     user?: any;
     userRole?: string;
@@ -24,6 +25,7 @@ export function DashboardLayout({
     showSecondaryNav = true,
     communityName,
     spaces = [],
+    groups = [], // Added default
     links = [],
     user,
     userRole = "member",
@@ -42,6 +44,7 @@ export function DashboardLayout({
                         <Sidebar
                             communityName={communityName}
                             spaces={spaces}
+                            groups={groups}
                             links={links}
                             user={user}
                             userRole={userRole}

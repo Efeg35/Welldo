@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,8 @@ interface CreateCourseModalProps {
     onClose: () => void;
     communityId: string; // Required to link course to community
     communitySlug?: string; // Not required for path anymore
+    groups?: { id: string; name: string }[];
+    initialGroupId?: string;
 }
 
 type CourseType = 'self-paced' | 'structured' | 'scheduled';
@@ -43,11 +45,19 @@ const COURSE_TYPES = [
     }
 ] as const;
 
-export function CreateCourseModal({ isOpen, onClose, communityId, communitySlug }: CreateCourseModalProps) {
+export function CreateCourseModal({ isOpen, onClose, communityId, communitySlug, groups = [], initialGroupId }: CreateCourseModalProps) {
     const [step, setStep] = useState<Step>('type-selection');
     const [selectedType, setSelectedType] = useState<CourseType | null>(null);
     const [name, setName] = useState("");
-    const [category, setCategory] = useState("Spaces");
+    const [category, setCategory] = useState("Alanlar"); // Default category
+    const [groupId, setGroupId] = useState<string>("");
+
+    useEffect(() => {
+        if (isOpen && initialGroupId) {
+            setGroupId(initialGroupId);
+        }
+    }, [isOpen, initialGroupId]);
+
     const [isPending, startTransition] = useTransition();
     const router = useRouter();
 
@@ -56,19 +66,29 @@ export function CreateCourseModal({ isOpen, onClose, communityId, communitySlug 
 
         startTransition(async () => {
             try {
-                // communityId, name, description, isPrivate, courseType, category
-                const { channel } = await createCourse(communityId, name, null, true, selectedType, category);
+                // If "none" is selected, send undefined
+                const targetGroupId = groupId === "none" || groupId === "" ? undefined : groupId;
+
+                // communityId, name, description, isPrivate, courseType, category, groupId
+                const { channel } = await createCourse(
+                    communityId,
+                    name,
+                    null,
+                    true,
+                    selectedType,
+                    category,
+                    targetGroupId
+                );
 
                 toast.success("Kurs başarıyla oluşturuldu!");
                 onClose();
-                // Redirect to the new course dashboard
-                // path: /community/[channelSlug]
                 router.push(`/community/${channel.slug}?view=builder`);
 
                 // Reset state
                 setStep('type-selection');
                 setName("");
                 setSelectedType(null);
+                setGroupId("");
 
             } catch (error) {
                 console.error(error);
@@ -100,7 +120,7 @@ export function CreateCourseModal({ isOpen, onClose, communityId, communitySlug 
                                 return (
                                     <div
                                         key={type.id}
-                                        onClick={() => setSelectedType(type.id)}
+                                        onClick={() => setSelectedType(type.id as CourseType)}
                                         className={cn(
                                             "flex items-start gap-4 p-4 rounded-lg border cursor-pointer transition-all hover:border-primary/50",
                                             isSelected ? "border-primary bg-primary/5 shadow-sm" : "border-border bg-card"
@@ -142,13 +162,15 @@ export function CreateCourseModal({ isOpen, onClose, communityId, communitySlug 
 
                             <div className="space-y-2">
                                 <Label className="text-base font-semibold">Alan grubu</Label>
-                                <Select value={category} onValueChange={setCategory}>
+                                <Select value={groupId} onValueChange={setGroupId}>
                                     <SelectTrigger>
                                         <SelectValue placeholder="Bir grup seç" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="Spaces">Alanlar</SelectItem>
-                                        <SelectItem value="Community">Topluluk</SelectItem>
+                                        <SelectItem value="none">Alanlar</SelectItem>
+                                        {groups.map(g => (
+                                            <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
+                                        ))}
                                     </SelectContent>
                                 </Select>
                             </div>

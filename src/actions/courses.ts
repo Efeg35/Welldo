@@ -10,7 +10,8 @@ export async function createCourse(
     description: string | null,
     isPrivate: boolean,
     courseType?: string,
-    category: string = "Alanlar"
+    category: string = "Alanlar",
+    groupId?: string
 ) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -35,7 +36,8 @@ export async function createCourse(
             category: category,
             icon: 'book-open',
             is_default: false,
-            settings: { course_type: courseType || 'self-paced' }
+            settings: { course_type: courseType || 'self-paced' },
+            group_id: groupId
         })
         .select()
         .single();

@@ -11,7 +11,7 @@ export default async function DashboardPageLayout({
     const { data: { user } } = await supabase.auth.getUser();
 
     // Fetch dynamic sidebar data
-    const { spaces, links } = await getSidebarData();
+    const { spaces, links, groups } = await getSidebarData();
 
     // Fetch user profile role and onboarding status
     let userRole = "member";
@@ -53,6 +53,7 @@ export default async function DashboardPageLayout({
             communityName="WellDo Topluluğu"
             spaces={spaces}
             links={links}
+            groups={groups}
             user={user}
             userRole={userRole}
             enabledFeatures={enabledFeatures}

@@ -1,25 +1,19 @@
 "use client";
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { createChannel } from "@/actions/community";
 import {
     MessageSquare,
     MessageCircle,
     Calendar,
     BookOpen,
-    Users,
-    Image as ImageIcon,
     Check,
-    Lock,
-    EyeOff,
-    Globe,
-    ArrowLeft,
-    ArrowRight
+    ArrowLeft
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
@@ -30,6 +24,8 @@ interface CreateSpaceModalProps {
     onClose: () => void;
     communityId: string;
     onSwitchToCourse?: () => void;
+    groups?: { id: string; name: string }[];
+    initialGroupId?: string;
 }
 
 type Step = 'type-selection' | 'details' | 'course-type';
@@ -42,12 +38,18 @@ const SPACE_TYPES: { type: SpaceType; label: string; icon: any; description: str
     { type: 'course', label: 'Kurs', icon: BookOpen, description: 'Yapılandırılmış içerik ve dersler sunun.' },
 ];
 
-export function CreateSpaceModal({ isOpen, onClose, communityId, onSwitchToCourse }: CreateSpaceModalProps) {
+export function CreateSpaceModal({ isOpen, onClose, communityId, onSwitchToCourse, groups = [], initialGroupId }: CreateSpaceModalProps) {
     const [step, setStep] = useState<Step>('type-selection');
     const [selectedType, setSelectedType] = useState<SpaceType>('post');
     const [name, setName] = useState("");
     const [slug, setSlug] = useState("");
-    const [category, setCategory] = useState("Spaces"); // Default category
+    const [groupId, setGroupId] = useState<string>("");
+
+    useEffect(() => {
+        if (isOpen) {
+            setGroupId(initialGroupId || "");
+        }
+    }, [isOpen, initialGroupId]);
     const [access, setAccess] = useState("open");
     const [notifications, setNotifications] = useState({ email: true, inApp: true });
 
@@ -67,7 +69,7 @@ export function CreateSpaceModal({ isOpen, onClose, communityId, onSwitchToCours
     const handleCreate = () => {
         if (!name) return;
 
-        // Auto-generate slug if empty (simple version)
+        // Auto-generate slug if empty
         const finalSlug = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
         const iconMap: Record<string, string> = {
@@ -79,13 +81,17 @@ export function CreateSpaceModal({ isOpen, onClose, communityId, onSwitchToCours
 
         startTransition(async () => {
             try {
+                // If "none" is selected, send undefined or null
+                const targetGroupId = groupId === "none" || groupId === "" ? undefined : groupId;
+
                 await createChannel({
                     communityId,
                     name,
                     slug: finalSlug,
                     type: selectedType,
                     access_level: access,
-                    category,
+                    category: "Alanlar",
+                    group_id: targetGroupId,
                     settings: { notifications },
                     icon: iconMap[selectedType] || 'message-square'
                 });
@@ -95,15 +101,13 @@ export function CreateSpaceModal({ isOpen, onClose, communityId, onSwitchToCours
                 setStep('type-selection');
                 setName("");
                 setSlug("");
-                setSlug("");
+                setGroupId("");
                 toast.success("Alan başarıyla oluşturuldu", {
                     description: `${name} oluşturuldu.`,
                 });
             } catch (error) {
                 console.error("Failed to create space", error);
-                toast.error("Alan oluşturulamadı", {
-                    description: "Veritabanı şeması güncel mi kontrol edin.",
-                });
+                toast.error("Alan oluşturulamadı");
             }
         });
     };
@@ -130,7 +134,6 @@ export function CreateSpaceModal({ isOpen, onClose, communityId, onSwitchToCours
                                         <item.icon className="w-6 h-6 text-foreground" />
                                     </div>
                                     <span className="font-semibold">{item.label}</span>
-                                    {/* <p className="text-xs text-muted-foreground mt-1">{item.description}</p> */}
                                 </button>
                             ))}
                         </div>
@@ -158,7 +161,6 @@ export function CreateSpaceModal({ isOpen, onClose, communityId, onSwitchToCours
                                 <Label>Alan adı</Label>
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center shrink-0">
-                                        {/* Dynamic icon based on selection */}
                                         <div className="w-2 h-2 rounded-full bg-blue-500"></div>
                                     </div>
                                     <Input
@@ -172,14 +174,15 @@ export function CreateSpaceModal({ isOpen, onClose, communityId, onSwitchToCours
 
                             <div className="space-y-2">
                                 <Label>Alan grubu</Label>
-                                <Select value={category} onValueChange={setCategory}>
+                                <Select value={groupId} onValueChange={setGroupId}>
                                     <SelectTrigger>
-                                        <SelectValue />
+                                        <SelectValue placeholder="Grup seçin" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="Spaces">Alanlar</SelectItem>
-                                        <SelectItem value="Community">Topluluk</SelectItem>
-                                        <SelectItem value="Support">Destek</SelectItem>
+                                        <SelectItem value="none">Alanlar</SelectItem>
+                                        {groups.map(g => (
+                                            <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
+                                        ))}
                                     </SelectContent>
                                 </Select>
                             </div>

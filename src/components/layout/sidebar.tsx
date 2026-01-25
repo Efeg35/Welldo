@@ -28,9 +28,19 @@ import { CreateSpaceModal } from "@/components/community/create-space-modal";
 import { CreateCourseModal } from "@/components/courses/create-course-modal";
 import { SidebarLinksSection } from "@/components/layout/sidebar-links-section";
 
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { CreateSpaceGroupModal } from "@/components/community/create-space-group-modal";
+import { FolderPlus } from "lucide-react";
+
 interface SidebarProps {
     communityName?: string;
     spaces?: any[];
+    groups?: any[]; // New prop
     links?: any[];
     user?: any;
     userRole?: string;
@@ -64,6 +74,7 @@ const typeIconMap: Record<string, any> = {
 export function Sidebar({
     communityName = "WellDo Topluluğu",
     spaces = [],
+    groups = [], // Default empty
     links = [],
     user,
     userRole = "member",
@@ -78,24 +89,58 @@ export function Sidebar({
     const pathname = usePathname();
     const [isCreateSpaceOpen, setIsCreateSpaceOpen] = useState(false);
     const [isCreateCourseOpen, setIsCreateCourseOpen] = useState(false);
+    const [isCreateSpaceGroupOpen, setIsCreateSpaceGroupOpen] = useState(false);
+    const [initialGroupId, setInitialGroupId] = useState<string | undefined>(undefined);
+
+    const handleCreateSpace = (groupId: string) => {
+        setInitialGroupId(groupId === 'ungrouped' ? 'none' : groupId);
+        setIsCreateSpaceOpen(true);
+    };
 
     // Filter spaces based on enabledFeatures
     const filteredSpaces = spaces.filter(space => {
-        // Map space types/categories to features if possible
-        // For now, we assume spaces are always 'discussions' or custom
-        // If we had a type mapping, we'd check it here.
-        // Assuming 'courses' are handled elsewhere or as specific space types.
         if (space.type === 'course' && enabledFeatures.courses === false) return false;
         return true;
     });
 
-    // Group spaces by category
-    const groupedSpaces = filteredSpaces.reduce((acc, space) => {
-        const category = space.category || 'Diğer';
-        if (!acc[category]) acc[category] = [];
-        acc[category].push(space);
-        return acc;
-    }, {} as Record<string, typeof spaces>);
+    // Group spaces
+    const groupsMap: Record<string, { id: string, title: string, position: number, spaces: any[] }> = {};
+
+    // 1. Initialize from groups prop
+    groups.forEach(g => {
+        groupsMap[g.id] = {
+            id: g.id,
+            title: g.name,
+            position: g.position,
+            spaces: []
+        };
+    });
+
+    // 2. Initialize 'ungrouped' bucket
+    // We treat 'ungrouped' (Alanlar) as a bucket for spaces without a group.
+    // Ensure it exists? Or only if there are ungrouped spaces?
+    // Let's always have it primarily for logic, but maybe valid to show even if empty? 
+    // Usually 'Alanlar' header is always shown if we stick to the old design, but now with groups, 
+    // maybe we only show it if there are spaces.
+    // Let's create it.
+    if (!groupsMap['ungrouped']) {
+        groupsMap['ungrouped'] = {
+            id: 'ungrouped',
+            title: 'Alanlar',
+            position: 9999, // Force to end or beginning? User didn't specify. Let's put at end for now.
+            spaces: []
+        };
+    }
+
+    // 3. Distribute spaces
+    filteredSpaces.forEach(space => {
+        const groupId = space.group?.id || space.group_id;
+        const targetId = (groupId && groupsMap[groupId]) ? groupId : 'ungrouped';
+        groupsMap[targetId].spaces.push(space);
+    });
+
+    // 4. Sort
+    const sortedGroups = Object.values(groupsMap).sort((a, b) => a.position - b.position);
 
     const canCreateSpace = user && (userRole === 'instructor' || userRole === 'admin');
 
@@ -131,36 +176,40 @@ export function Sidebar({
                 </div>
 
                 {/* Spaces Header & Create Button */}
-                <div className="flex items-center justify-between px-3 mt-6 mb-2">
-                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                        Alanlar
-                    </h3>
-                    {canCreateSpace && (
-                        <button
-                            onClick={() => {
-                                console.log("Create Space Clicked");
-                                setIsCreateSpaceOpen(true);
-                            }}
-                            className="text-gray-400 hover:text-white transition-colors relative z-50 cursor-pointer"
-                            title="Alan Oluştur"
-                        >
-                            <Plus className="w-4 h-4" />
-                        </button>
-                    )}
-                </div>
-
                 {/* Dynamic Spaces */}
-                <div className="space-y-1">
-                    {Object.entries(groupedSpaces).map(([category, categorySpaces]) => (
-                        <div key={category}>
-                            {category !== 'Spaces' && category !== 'Diğer' && category !== 'Alanlar' && (
-                                <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 mt-4">
-                                    {category}
+                <div className="space-y-6 mt-6">
+                    {sortedGroups.map((group) => (
+                        <div key={group.id}>
+                            <div className="flex items-center justify-between px-3 mb-2 min-h-[20px] group/header">
+                                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                    {group.title}
                                 </h3>
-                            )}
+                                {/* Show Create Actions next to the group header */}
+                                {canCreateSpace && (
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <button
+                                                className="text-gray-400 hover:text-white transition-colors outline-none opacity-0 group-hover/header:opacity-100 focus:opacity-100"
+                                            >
+                                                <Plus className="w-4 h-4" />
+                                            </button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="w-48">
+                                            <DropdownMenuItem onClick={() => handleCreateSpace(group.id)}>
+                                                <Plus className="w-4 h-4 mr-2" />
+                                                Alan oluştur
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => setIsCreateSpaceGroupOpen(true)}>
+                                                <FolderPlus className="w-4 h-4 mr-2" />
+                                                Alan Grubu oluştur
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                )}
+                            </div>
 
                             <div className="space-y-1">
-                                {(categorySpaces as any[]).map((space: any) => {
+                                {group.spaces.map((space: any) => {
                                     const Icon = iconMap[space.icon] || typeIconMap[space.type] || MessageSquare;
                                     const href = `/community/${space.slug}`;
                                     const isActive = pathname === href;
@@ -216,11 +265,24 @@ export function Sidebar({
                     setIsCreateSpaceOpen(false);
                     setIsCreateCourseOpen(true);
                 }}
+                groups={sortedGroups
+                    .filter(g => g.id !== 'ungrouped')
+                    .map(g => ({ id: g.id, name: g.title }))}
+                initialGroupId={initialGroupId}
+            />
+            <CreateSpaceGroupModal
+                isOpen={isCreateSpaceGroupOpen}
+                onClose={() => setIsCreateSpaceGroupOpen(false)}
+                communityId={spaces?.[0]?.community_id || ""}
             />
             <CreateCourseModal
                 isOpen={isCreateCourseOpen}
                 onClose={() => setIsCreateCourseOpen(false)}
                 communityId={spaces?.[0]?.community_id || ""}
+                groups={sortedGroups
+                    .filter(g => g.id !== 'ungrouped')
+                    .map(g => ({ id: g.id, name: g.title }))}
+                initialGroupId={initialGroupId}
             />
         </aside>
     );

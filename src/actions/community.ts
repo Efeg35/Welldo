@@ -249,9 +249,18 @@ export async function getSidebarData(communityId?: string) {
 
     let { data: rawSpaces } = await supabase
         .from('channels')
-        .select('*')
+        .select(`
+            *,
+            group:channel_groups(*)
+        `)
         .eq('community_id', targetedCommunityId)
         .order('order_index', { ascending: true });
+
+    let { data: rawGroups } = await supabase
+        .from('channel_groups')
+        .select('*')
+        .eq('community_id', targetedCommunityId)
+        .order('position', { ascending: true });
 
     let spaces = rawSpaces || [];
 
@@ -346,8 +355,68 @@ export async function getSidebarData(communityId?: string) {
 
     return {
         spaces: spacesWithCounts,
-        links: links || []
+        links: links || [],
+        groups: rawGroups || []
     };
+}
+
+export async function createSpaceGroup(communityId: string, name: string, slug: string, settings: any = {}) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+        throw new Error("Unauthorized");
+    }
+
+    // Get max position
+    const { data: maxPos } = await supabase
+        .from('channel_groups')
+        .select('position')
+        .eq('community_id', communityId)
+        .order('position', { ascending: false })
+        .limit(1)
+        .single();
+
+    const newPosition = (maxPos?.position || 0) + 1;
+
+    const { data, error } = await supabase
+        .from('channel_groups')
+        .insert({
+            community_id: communityId,
+            name,
+            slug,
+            position: newPosition,
+            settings
+        })
+        .select()
+        .single();
+
+    if (error) {
+        console.error("Error creating space group:", error);
+        throw new Error("Failed to create space group");
+    }
+
+    revalidatePath('/community');
+    return data;
+}
+
+export async function updateSpaceGroup(groupId: string, updates: any) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) throw new Error("Unauthorized");
+
+    const { error } = await supabase
+        .from('channel_groups')
+        .update(updates)
+        .eq('id', groupId);
+
+    if (error) {
+        console.error("Error updating space group:", error);
+        throw new Error("Failed to update space group");
+    }
+
+    revalidatePath('/community');
 }
 
 export async function markChannelAsRead(channelId: string) {
@@ -448,6 +517,7 @@ interface CreateChannelParams {
     access_level?: string; // 'open', 'private', 'secret'
     settings?: any; // { notifications: { email: boolean, in_app: boolean } }
     communityId?: string;
+    group_id?: string;
 }
 
 export async function createChannel(params: CreateChannelParams) {
@@ -493,6 +563,7 @@ export async function createChannel(params: CreateChannelParams) {
             order_index: newOrderIndex,
             access_level: params.access_level, // Remove default 'open'
             settings: params.settings || {},
+            group_id: params.group_id,
         })
         .select()
         .single();
