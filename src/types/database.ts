@@ -45,6 +45,7 @@ export interface Channel {
     category: string;
     access_level: 'open' | 'private' | 'secret';
     settings: Record<string, any> | null;
+    position: number;
     created_at: string;
     // New fields
     group_id?: string | null;
