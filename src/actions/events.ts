@@ -11,6 +11,13 @@ export async function createEvent(data: {
     description?: string;
     eventType: EventType;
     locationAddress?: string;
+    eventUrl?: string;
+    liveStreamSettings?: {
+        recordLive: boolean;
+        muteParticipants: boolean;
+        disableChat: boolean;
+        hideParticipantsList: boolean;
+    };
     startTime: Date;
     endTime: Date;
     coverImageUrl?: string;
@@ -35,6 +42,8 @@ export async function createEvent(data: {
             description: data.description,
             event_type: data.eventType,
             location_address: data.locationAddress,
+            event_url: data.eventUrl,
+            live_stream_settings: data.liveStreamSettings,
             start_time: data.startTime.toISOString(),
             end_time: data.endTime.toISOString(),
             cover_image_url: data.coverImageUrl,

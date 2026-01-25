@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useState, useTransition, useEffect } from "react";
 import { createEvent } from "@/actions/events";
 import { getCommunityChannels } from "@/actions/community";
@@ -61,6 +62,13 @@ export function CreateEventModal({ isOpen, onClose, communityId, channelId: init
     // Section 3: Where
     const [eventType, setEventType] = useState<EventType>("online_zoom");
     const [locationAddress, setLocationAddress] = useState("");
+    const [eventUrl, setEventUrl] = useState("");
+
+    // WellDo Live Stream settings (MVP)
+    const [recordLive, setRecordLive] = useState(false);
+    const [muteParticipants, setMuteParticipants] = useState(false);
+    const [disableChat, setDisableChat] = useState(false);
+    const [hideParticipantsList, setHideParticipantsList] = useState(false);
 
     // Section 4: Paid
     const [isPaidEvent, setIsPaidEvent] = useState("free"); // "free" | "paid"
@@ -117,6 +125,13 @@ export function CreateEventModal({ isOpen, onClose, communityId, channelId: init
                     description: "",
                     eventType,
                     locationAddress: eventType === 'physical' ? locationAddress : undefined,
+                    eventUrl: eventType === 'online_zoom' ? eventUrl : undefined,
+                    liveStreamSettings: eventType === 'welldo_live' ? {
+                        recordLive,
+                        muteParticipants,
+                        disableChat,
+                        hideParticipantsList,
+                    } : undefined,
                     startTime: startDateTime,
                     endTime: endDateTime,
                     isPaid,
@@ -124,12 +139,14 @@ export function CreateEventModal({ isOpen, onClose, communityId, channelId: init
                     recurrence: repeatFrequency,
                 });
 
-                toast.success("Etkinlik başarıyla oluşturuldu");
+                toast.success("Etkinlik başarıyla oluşturuldu!");
                 onClose();
+
                 // Reset form
                 setTitle("");
                 setEventType("online_zoom");
                 setLocationAddress("");
+                setEventUrl("");
                 setIsPaidEvent("free");
                 setTicketPrice("");
             } catch (error) {
@@ -333,6 +350,11 @@ export function CreateEventModal({ isOpen, onClose, communityId, channelId: init
                                                 <span>Bağlantı (Zoom, YouTube vb.)</span>
                                             </div>
                                         </SelectItem>
+                                        <SelectItem value="welldo_live" className="text-base">
+                                            <div className="flex items-center gap-2">
+                                                <span>WellDo Canlı Yayın</span>
+                                            </div>
+                                        </SelectItem>
                                         <SelectItem value="tbd" className="text-base">
                                             <div className="flex items-center gap-2">
                                                 <span>Henüz belli değil (TBD)</span>
@@ -351,6 +373,53 @@ export function CreateEventModal({ isOpen, onClose, communityId, channelId: init
                                         value={locationAddress}
                                         onChange={(e) => setLocationAddress(e.target.value)}
                                     />
+                                </div>
+                            )}
+
+                            {eventType === 'online_zoom' && (
+                                <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                                    <Label className="text-base font-bold text-gray-900">Bağlantı</Label>
+                                    <Input
+                                        placeholder="https://"
+                                        className="h-11 bg-white border-gray-300 focus:border-gray-900 focus:ring-0 rounded-md text-base"
+                                        value={eventUrl}
+                                        onChange={(e) => setEventUrl(e.target.value)}
+                                    />
+                                </div>
+                            )}
+
+                            {eventType === 'welldo_live' && (
+                                <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                                    <div className="space-y-3 pt-2">
+                                        <div className="flex items-start justify-between py-3 border-b border-gray-100">
+                                            <div className="flex-1 pr-4">
+                                                <Label className="text-base font-medium text-gray-900 cursor-pointer block">⏺️ Canlı yayını kaydet (30 Günlük)</Label>
+                                                <p className="text-sm text-gray-500 mt-1">Yayın bittikten sonra kayıt otomatik olarak derslere eklenir ve 30 gün boyunca izlenebilir. Sonrasında silinir.</p>
+                                            </div>
+                                            <Switch checked={recordLive} onCheckedChange={setRecordLive} />
+                                        </div>
+                                        <div className="flex items-start justify-between py-3 border-b border-gray-100">
+                                            <div className="flex-1 pr-4">
+                                                <Label className="text-base font-medium text-gray-900 cursor-pointer block">🔇 Katılımcılar sessiz başlasın</Label>
+                                                <p className="text-sm text-gray-500 mt-1">Odaya girenlerin mikrofonu kapalı olur.</p>
+                                            </div>
+                                            <Switch checked={muteParticipants} onCheckedChange={setMuteParticipants} />
+                                        </div>
+                                        <div className="flex items-start justify-between py-3 border-b border-gray-100">
+                                            <div className="flex-1 pr-4">
+                                                <Label className="text-base font-medium text-gray-900 cursor-pointer block">💬 Sohbeti devre dışı bırak</Label>
+                                                <p className="text-sm text-gray-500 mt-1">Yayın sırasında chat penceresi gizlenir.</p>
+                                            </div>
+                                            <Switch checked={disableChat} onCheckedChange={setDisableChat} />
+                                        </div>
+                                        <div className="flex items-start justify-between py-3">
+                                            <div className="flex-1 pr-4">
+                                                <Label className="text-base font-medium text-gray-900 cursor-pointer block">🙈 Katılımcı listesini gizle</Label>
+                                                <p className="text-sm text-gray-500 mt-1">Katılımcılar birbirlerini göremez.</p>
+                                            </div>
+                                            <Switch checked={hideParticipantsList} onCheckedChange={setHideParticipantsList} />
+                                        </div>
+                                    </div>
                                 </div>
                             )}
                         </section>

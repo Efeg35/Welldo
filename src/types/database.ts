@@ -1,7 +1,7 @@
 // Database Types for WellDo
 
 export type UserRole = "member" | "instructor" | "admin";
-export type EventType = "online_zoom" | "physical" | "tbd";
+export type EventType = "online_zoom" | "physical" | "tbd" | "welldo_live";
 export type MembershipStatus = "active" | "cancelled" | "past_due";
 export type ChannelType = "post" | "chat" | "event" | "course";
 
