@@ -188,6 +188,7 @@ export function EventFeed({ channel, user, initialEvents, members = [] }: EventF
                 onClose={() => setIsCreateModalOpen(false)}
                 channelId={channel.id}
                 communityId={channel.community_id}
+                currentUser={user}
             />
             <DeleteSpaceDialog
                 isOpen={isDeleteModalOpen}

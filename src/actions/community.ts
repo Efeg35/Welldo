@@ -970,3 +970,26 @@ export async function getBookmarkedPosts() {
         };
     });
 }
+
+export async function getCommunityChannels(communityId: string, type?: string) {
+    const supabase = await createClient();
+
+    let query = supabase
+        .from('channels')
+        .select('id, name, type, icon')
+        .eq('community_id', communityId)
+        .order('order_index', { ascending: true });
+
+    if (type) {
+        query = query.eq('type', type);
+    }
+
+    const { data: channels, error } = await query;
+
+    if (error) {
+        console.error("Error fetching community channels:", error);
+        return [];
+    }
+
+    return channels;
+}

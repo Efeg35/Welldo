@@ -2,13 +2,14 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { EventType } from "@/types";
 
 export async function createEvent(data: {
     communityId: string;
     channelId: string;
     title: string;
     description?: string;
-    eventType: 'online_zoom' | 'physical';
+    eventType: EventType;
     locationAddress?: string;
     startTime: Date;
     endTime: Date;
@@ -16,6 +17,7 @@ export async function createEvent(data: {
     isPaid?: boolean;
     ticketPrice?: number;
     topics?: string[];
+    recurrence?: string;
 }) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -39,6 +41,7 @@ export async function createEvent(data: {
             is_paid: data.isPaid || false,
             ticket_price: data.ticketPrice || 0,
             topics: data.topics || [],
+            recurrence: data.recurrence || 'none',
             // Default max_attendees to null (unlimited) for now
         })
         .select()
