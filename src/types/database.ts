@@ -102,6 +102,7 @@ export interface Post {
     user_id: string;
     title: string | null;
     content: string;
+    topic: string | null;
     image_url?: string | null; // Added based on PostCard usage and createPost action
     media_urls: string[] | null;
     created_at: string;

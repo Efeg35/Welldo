@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { Channel } from "@/types";
 
-export async function getPosts(channelId?: string, sort: string = 'latest') {
+export async function getPosts(channelId?: string, sort: string = 'latest', topic?: string) {
     const supabase = await createClient();
 
     let query = supabase
@@ -52,6 +52,10 @@ export async function getPosts(channelId?: string, sort: string = 'latest') {
         query = query.eq('channel_id', channelId);
     }
 
+    if (topic) {
+        query = query.eq('topic', topic);
+    }
+
     const { data, error } = await query;
 
     if (error) {
@@ -80,7 +84,8 @@ export async function createPost(
     channelId?: string,
     communityId?: string,
     title?: string,
-    imageUrl?: string
+    imageUrl?: string,
+    topic?: string
 ) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -140,6 +145,7 @@ export async function createPost(
             content,
             title: title || null,
             image_url: imageUrl || null,
+            topic: topic || null,
             channel_id: sanitizedChannelId,
             community_id: sanitizedCommunityId
         });
@@ -718,15 +724,28 @@ export async function getSpaceMembers(channelId: string) {
         .from('space_members')
         .select(`
             user_id,
+            created_at,
             profile:profiles(*)
         `)
         .eq('channel_id', channelId);
 
     if (error) return [];
-    return data.map(m => m.profile).filter(Boolean);
+
+    // Transform to match CourseMembersTab structure
+    return data
+        .filter((m: any) => m.profile)
+        .map((m: any) => ({
+            ...m.profile,
+            joined_at: m.created_at
+        }));
 }
 
-export async function editPost(postId: string, title: string, content: string) {
+export async function editPost(
+    postId: string,
+    title: string | null,
+    content: string,
+    topic: string | null,
+) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 

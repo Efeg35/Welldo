@@ -27,9 +27,10 @@ interface SpaceSettingsDialogProps {
     onOpenChange: (open: boolean) => void;
     channel: Channel;
     members?: Profile[];
+    isAdmin?: boolean;
 }
 
-export function SpaceSettingsDialog({ open, onOpenChange, channel, members = [] }: SpaceSettingsDialogProps) {
+export function SpaceSettingsDialog({ open, onOpenChange, channel, members = [], isAdmin = false }: SpaceSettingsDialogProps) {
     const [name, setName] = useState(channel.name);
     const [description, setDescription] = useState(channel.description || "");
     const [category, setCategory] = useState(channel.category || "Alanlar");
@@ -237,7 +238,13 @@ export function SpaceSettingsDialog({ open, onOpenChange, channel, members = [] 
                             )}
 
                             {activeTab === 'members' && (
-                                <SpaceMembers channelId={channel.id} initialMembers={members} />
+                                <SpaceMembers
+                                    channelId={channel.id}
+                                    initialMembers={members}
+                                    hideMemberCount={channel.settings?.hide_member_count}
+                                    allowInvite={channel.settings?.allow_members_to_invite}
+                                    isAdmin={isAdmin}
+                                />
                             )}
 
                         </div>

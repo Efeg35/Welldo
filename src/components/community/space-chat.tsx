@@ -225,6 +225,7 @@ export function SpaceChat({ channel, user, initialMessages, members = [] }: Spac
                 onOpenChange={setIsSettingsOpen}
                 channel={channel}
                 members={members}
+                isAdmin={isAdmin}
             />
 
             {/* Main Chat Feed */}
@@ -327,13 +328,13 @@ export function SpaceChat({ channel, user, initialMessages, members = [] }: Spac
             {isSidebarOpen && (
                 <div className="w-64 border-l bg-gray-50/50 flex flex-col flex-shrink-0 hidden md:flex">
                     <div className="h-14 flex items-center px-4 border-b font-semibold text-sm text-muted-foreground flex-shrink-0">
-                        Üyeler ({allMembers.length})
+                        Üyeler {(isAdmin || !channel.settings?.hide_member_count) && `(${allMembers.length})`}
                     </div>
                     <div className="flex-1 overflow-y-auto">
                         <div className="p-3 space-y-4">
                             {/* Group 1: Eğitmenler / Admins */}
                             <div className="space-y-1">
-                                <h4 className="px-2 text-xs font-bold text-muted-foreground uppercase tracking-widest mb-2">Eğitmenler — {instructors.length}</h4>
+                                <h4 className="px-2 text-xs font-bold text-muted-foreground uppercase tracking-widest mb-2">Eğitmenler {(isAdmin || !channel.settings?.hide_member_count) && `— ${instructors.length}`}</h4>
                                 {instructors.map(m => (
                                     <MemberItem
                                         key={m.id}
@@ -350,7 +351,7 @@ export function SpaceChat({ channel, user, initialMessages, members = [] }: Spac
                             {/* Group 2: Üyeler */}
                             <div className="space-y-1 pt-2">
                                 <h4 className="px-2 text-xs font-bold text-muted-foreground uppercase tracking-widest mb-2">
-                                    Çevrimiçi — {Array.from(onlineUserIds).filter(id => membersList.some(m => m.id === id)).length}
+                                    Çevrimiçi {(isAdmin || !channel.settings?.hide_member_count) && `— ${Array.from(onlineUserIds).filter(id => membersList.some(m => m.id === id)).length}`}
                                 </h4>
                                 {membersList.map(m => (
                                     <MemberItem

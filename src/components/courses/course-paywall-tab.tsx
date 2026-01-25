@@ -6,28 +6,30 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { getCoursePaywall, upsertPaywall, deletePaywall } from '@/actions/paywalls';
+import { getPaywall, upsertPaywall, deletePaywall } from '@/actions/paywalls';
 import { createBrowserClient } from '@supabase/ssr';
-import { Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 // --------------------------------------------------------
-// NOT: Bu bileşen "CoursePaywallTab" (Ödeme Duvarları) 
-// Eğitmenlerin kurslarını ücretli/ücretsiz olarak ayarladığı yerdir.
+// PaywallTab: Generic component for Course and Channel paywalls
 // --------------------------------------------------------
 
-interface CoursePaywallTabProps {
-    courseId: string;
+interface PaywallTabProps {
+    entityId: string;
+    type: 'course' | 'channel';
 }
 
-export function CoursePaywallTab({ courseId }: CoursePaywallTabProps) {
+export function PaywallTab({ entityId, type }: PaywallTabProps) {
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [isPaid, setIsPaid] = useState(false);
     const [price, setPrice] = useState<string>('');
     const [currency, setCurrency] = useState('TRY');
     const [hasMerchantKey, setHasMerchantKey] = useState<boolean | null>(null);
+
+    const label = type === 'course' ? 'Kurs' : 'Alan';
 
     useEffect(() => {
         async function loadData() {
@@ -49,7 +51,7 @@ export function CoursePaywallTab({ courseId }: CoursePaywallTabProps) {
                 }
 
                 // Load paywall
-                const { paywall, error } = await getCoursePaywall(courseId);
+                const { paywall } = await getPaywall(entityId, type);
                 if (paywall) {
                     setIsPaid(true);
                     setPrice(paywall.price.toString());
@@ -63,18 +65,18 @@ export function CoursePaywallTab({ courseId }: CoursePaywallTabProps) {
         }
 
         loadData();
-    }, [courseId]);
+    }, [entityId, type]);
 
     const handleSave = async () => {
         setIsSaving(true);
         try {
             if (!isPaid) {
                 // If switching to free, delete paywall
-                const result = await deletePaywall(courseId);
+                const result = await deletePaywall(entityId, type);
                 if (result.success) {
-                    toast.success('Kurs şimdi ücretsiz.');
+                    toast.success(`${label} şimdi ücretsiz.`);
                 } else {
-                    toast.error('Kurs durumu güncellenemedi.');
+                    toast.error(`${label} durumu güncellenemedi.`);
                 }
             } else {
                 // Upsert paywall
@@ -85,7 +87,7 @@ export function CoursePaywallTab({ courseId }: CoursePaywallTabProps) {
                     return;
                 }
 
-                const result = await upsertPaywall(courseId, numericPrice, currency);
+                const result = await upsertPaywall(entityId, type, numericPrice, currency);
                 if (result.success) {
                     toast.success('Ödeme duvarı başarıyla kaydedildi.');
                 } else {
@@ -107,7 +109,7 @@ export function CoursePaywallTab({ courseId }: CoursePaywallTabProps) {
         <div className="space-y-6 max-w-2xl">
             <div>
                 <h3 className="text-lg font-medium">Ödeme Ayarları</h3>
-                <p className="text-sm text-gray-500">Kursunuz için bir fiyat belirleyin veya ücretsiz yapın.</p>
+                <p className="text-sm text-gray-500">{label} için bir fiyat belirleyin veya ücretsiz yapın.</p>
             </div>
 
             <div className="flex items-center space-x-2">
@@ -116,7 +118,7 @@ export function CoursePaywallTab({ courseId }: CoursePaywallTabProps) {
                     checked={isPaid}
                     onCheckedChange={setIsPaid}
                 />
-                <Label htmlFor="paid-mode">Bu kurs ücretli bir kurstur</Label>
+                <Label htmlFor="paid-mode">Bu {label.toLowerCase()} ücretlidir</Label>
             </div>
 
             {isPaid && (
@@ -157,4 +159,14 @@ export function CoursePaywallTab({ courseId }: CoursePaywallTabProps) {
             </div>
         </div>
     );
+}
+
+// Wrapper for backward compatibility
+export function CoursePaywallTab({ courseId }: { courseId: string }) {
+    return <PaywallTab entityId={courseId} type="course" />;
+}
+
+// Wrapper for Channel Paywalls
+export function ChannelPaywallTab({ channelId }: { channelId: string }) {
+    return <PaywallTab entityId={channelId} type="channel" />;
 }

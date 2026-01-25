@@ -40,12 +40,26 @@ interface CreatePostProps {
     post?: Post;
     channels?: Channel[]; // Available channels for selection
     children?: React.ReactNode; // Custom trigger
+    availableTopics?: string[];
+    allowTitle?: boolean;
+    allowImage?: boolean;
 }
 
-export function CreatePost({ user, channelId, communityId, post, channels = [], children }: CreatePostProps) {
+export function CreatePost({
+    user,
+    channelId,
+    communityId,
+    post,
+    channels = [],
+    children,
+    availableTopics = [],
+    allowTitle = true,
+    allowImage = true
+}: CreatePostProps) {
     const [open, setOpen] = useState(false);
     const [content, setContent] = useState(post?.content || "");
     const [title, setTitle] = useState(post?.title || "");
+    const [topic, setTopic] = useState<string | null>(post?.topic || null);
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(post?.image_url || null);
 
@@ -140,7 +154,7 @@ export function CreatePost({ user, channelId, communityId, post, channels = [], 
                 const targetChannelId = selectedChannelId;
 
                 if (post) {
-                    await editPost(post.id, title, content);
+                    await editPost(post.id, title, content, topic);
                     toast.success("Gönderi güncellendi!");
                 } else {
                     let imageUrl = undefined;
@@ -164,13 +178,14 @@ export function CreatePost({ user, channelId, communityId, post, channels = [], 
                         imageUrl = publicUrl;
                     }
 
-                    await createPost(content, targetChannelId, communityId, title, imageUrl);
+                    await createPost(content, targetChannelId, communityId, title, imageUrl, topic || undefined);
                     toast.success("Gönderi paylaşıldı!");
                 }
 
                 // Reset form
                 setContent("");
                 setTitle("");
+                setTopic(null);
                 setImageFile(null);
                 setImagePreview(null);
                 setOpen(false);
@@ -215,14 +230,16 @@ export function CreatePost({ user, channelId, communityId, post, channels = [], 
                 {/* Body */}
                 <div className="flex flex-col h-[60vh] sm:h-[450px] overflow-y-auto px-8 py-2">
                     <div className="space-y-4 flex-1">
-                        <input
-                            type="text"
-                            value={title}
-                            onChange={(e) => setTitle(e.target.value)}
-                            placeholder="Başlık (isteğe bağlı)"
-                            className="w-full bg-transparent text-4xl font-bold placeholder:text-muted-foreground/40 outline-none border-none p-0 focus-visible:ring-0"
-                            autoFocus
-                        />
+                        {allowTitle && (
+                            <input
+                                type="text"
+                                value={title}
+                                onChange={(e) => setTitle(e.target.value)}
+                                placeholder="Başlık (isteğe bağlı)"
+                                className="w-full bg-transparent text-4xl font-bold placeholder:text-muted-foreground/40 outline-none border-none p-0 focus-visible:ring-0"
+                                autoFocus
+                            />
+                        )}
 
                         <textarea
                             value={content}
@@ -282,11 +299,13 @@ export function CreatePost({ user, channelId, communityId, post, channels = [], 
                                 <div className="h-px bg-border my-2" />
 
                                 <div className="text-xs font-semibold text-muted-foreground px-2 py-1 mb-1 uppercase tracking-wider">Medya</div>
-                                <DropdownMenuItem className="cursor-pointer gap-2 relative">
-                                    <ImageIcon className="w-4 h-4" />
-                                    <span>Resim</span>
-                                    <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleImageSelect} />
-                                </DropdownMenuItem>
+                                {allowImage && (
+                                    <DropdownMenuItem className="cursor-pointer gap-2 relative">
+                                        <ImageIcon className="w-4 h-4" />
+                                        <span>Resim</span>
+                                        <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleImageSelect} />
+                                    </DropdownMenuItem>
+                                )}
                                 <DropdownMenuItem className="cursor-pointer gap-2 relative">
                                     <Paperclip className="w-4 h-4" />
                                     <span>Dosya</span>
@@ -303,12 +322,14 @@ export function CreatePost({ user, channelId, communityId, post, channels = [], 
                             </DropdownMenuContent>
                         </DropdownMenu>
 
-                        <Button variant="ghost" size="icon" className="hover:bg-muted/50 hover:text-foreground relative overflow-hidden">
-                            <label className="cursor-pointer flex items-center justify-center w-full h-full absolute inset-0">
-                                <ImageIcon className="w-5 h-5" />
-                                <input type="file" accept="image/*" className="hidden" onChange={handleImageSelect} />
-                            </label>
-                        </Button>
+                        {allowImage && (
+                            <Button variant="ghost" size="icon" className="hover:bg-muted/50 hover:text-foreground relative overflow-hidden">
+                                <label className="cursor-pointer flex items-center justify-center w-full h-full absolute inset-0">
+                                    <ImageIcon className="w-5 h-5" />
+                                    <input type="file" accept="image/*" className="hidden" onChange={handleImageSelect} />
+                                </label>
+                            </Button>
+                        )}
                         <Button variant="ghost" size="icon" className="hover:bg-muted/50 hover:text-foreground relative overflow-hidden">
                             <label className="cursor-pointer flex items-center justify-center w-full h-full absolute inset-0">
                                 <Paperclip className="w-5 h-5" />
@@ -358,6 +379,35 @@ export function CreatePost({ user, channelId, communityId, post, channels = [], 
                     </div>
 
                     <div className="flex items-center gap-4">
+                        {/* Topic Selector */}
+                        {availableTopics.length > 0 && (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" className="text-muted-foreground hover:text-foreground text-sm font-normal px-2 h-auto gap-2 max-w-[200px]">
+                                        <span className="truncate">
+                                            {topic || "Bir konu seç"}
+                                        </span>
+                                        <ChevronDown className="w-3 h-3 opacity-50 shrink-0" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-[200px] max-h-[300px] overflow-y-auto">
+                                    <DropdownMenuItem onSelect={() => setTopic(null)}>
+                                        <span className="text-muted-foreground italic">Konu yok</span>
+                                    </DropdownMenuItem>
+                                    {availableTopics.map(t => (
+                                        <DropdownMenuItem
+                                            key={t}
+                                            onSelect={() => setTopic(t)}
+                                            className="justify-between"
+                                        >
+                                            <span className="truncate">{t}</span>
+                                            {topic === t && <Check className="w-4 h-4 opacity-50" />}
+                                        </DropdownMenuItem>
+                                    ))}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        )}
+
                         {/* Space Selector - Only show if not forced to a specific channel (or if we want to allow moving)
                             But usually if channelId is passed, we are LOCKED to that channel context.
                             If channelId is NOT passed (Dashboard), we show selector.

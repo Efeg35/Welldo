@@ -15,7 +15,7 @@ import { getCourse } from "@/actions/courses";
 import { Profile, Message } from "@/types";
 import { SpaceLockScreen } from "@/components/community/space-lock-screen";
 
-export default async function ChannelPage({ params, searchParams }: { params: { slug: string }, searchParams: { sort?: string, view?: string, lessonId?: string } }) {
+export default async function ChannelPage({ params, searchParams }: { params: { slug: string }, searchParams: { sort?: string, view?: string, lessonId?: string, topic?: string } }) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -107,7 +107,7 @@ export default async function ChannelPage({ params, searchParams }: { params: { 
         return notFound();
     }
 
-    const { sort = 'latest' } = await searchParams;
+    const { sort = 'latest', topic } = await searchParams;
 
     // 4. Render based on channel type & access
     if (channel.type === 'event') {
@@ -140,7 +140,8 @@ export default async function ChannelPage({ params, searchParams }: { params: { 
 
     // Default to Post Feed
     if (!hasAccess) return <SpaceLockScreen channel={channel} />;
-    const posts = await getPosts(channel.id, sort);
+    const posts = await getPosts(channel.id, sort, topic as string);
+    const members = await getChannelMembers(channel.id);
     const communityId = channel.community_id;
 
     // Fetch available channels for selector in CreatePost
@@ -148,5 +149,5 @@ export default async function ChannelPage({ params, searchParams }: { params: { 
     // Ideally we want same list as sidebar.
     const { spaces } = await getSidebarData(communityId);
 
-    return <PostFeed channel={channel} user={profile} posts={posts} communityId={communityId} channels={spaces} />;
+    return <PostFeed channel={channel} user={profile} posts={posts} communityId={communityId} channels={spaces} members={members as unknown as Profile[]} />;
 }
