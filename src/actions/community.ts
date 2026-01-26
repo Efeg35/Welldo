@@ -958,17 +958,49 @@ export async function getBookmarkedPosts() {
     }
 
     // Transform to flatten the structure slightly if needed, or return as is
-    return data.map((item: any) => {
-        const post = item.posts;
-        return {
-            ...post,
-            channel_name: post.channel_id?.name || 'Genel',
-            _count: {
-                post_likes: post.post_likes?.length || 0,
-                comments: post.comments?.[0]?.count || 0
-            }
-        };
-    });
+    return data
+        .filter((item: any) => item.posts !== null)
+        .map((item: any) => {
+            const post = item.posts;
+            return {
+                ...post,
+                channel_name: post.channel_id?.name || 'Genel',
+                _count: {
+                    post_likes: post.post_likes?.length || 0,
+                    comments: post.comments?.[0]?.count || 0
+                }
+            };
+        });
+}
+
+export async function getBookmarkedEvents() {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) return [];
+
+    const { data, error } = await supabase
+        .from('bookmarks')
+        .select(`
+            event_id,
+            events:events!bookmarks_event_id_fkey (
+                *,
+                community:community_id ( id, name, slug ),
+                channel:channel_id ( id, name, slug )
+            )
+        `)
+        .eq('user_id', user.id)
+        .not('event_id', 'is', null)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error("Error fetching bookmarked events:", error);
+        return [];
+    }
+
+    return data
+        .filter((item: any) => item.events !== null)
+        .map((item: any) => item.events);
 }
 
 export async function getCommunityChannels(communityId: string, type?: string) {

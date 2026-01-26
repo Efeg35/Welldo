@@ -7,25 +7,32 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { MessageCircle, Bookmark, ExternalLink } from "lucide-react";
-import { getBookmarkedPosts } from "@/actions/community";
+import { getBookmarkedPosts, getBookmarkedEvents } from "@/actions/community";
 import { cn } from "@/lib/utils";
+import { format } from "date-fns";
+import { tr } from "date-fns/locale";
+import { MapPin, Video, Calendar, User, Bookmark, MessageCircle, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { formatDistanceToNow } from "date-fns";
-import { tr } from "date-fns/locale";
 
 export function BookmarksPopover() {
     const [open, setOpen] = useState(false);
-    const [bookmarks, setBookmarks] = useState<any[]>([]);
+    const [posts, setPosts] = useState<any[]>([]);
+    const [events, setEvents] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [activeTab, setActiveTab] = useState("posts");
 
     const fetchBookmarks = async () => {
         setIsLoading(true);
         try {
-            const data = await getBookmarkedPosts();
-            setBookmarks(data);
+            if (activeTab === 'posts') {
+                const data = await getBookmarkedPosts();
+                setPosts(data);
+            } else if (activeTab === 'events') {
+                const data = await getBookmarkedEvents();
+                setEvents(data);
+            }
         } catch (error) {
             console.error(error);
         } finally {
@@ -37,7 +44,7 @@ export function BookmarksPopover() {
         if (open) {
             fetchBookmarks();
         }
-    }, [open]);
+    }, [open, activeTab]);
 
     // Simple hack to support SVG as component since lucide-react Bookmark is filled differently by default
     const BookmarkIcon = () => (
@@ -91,8 +98,14 @@ export function BookmarksPopover() {
                         >
                             Yorumlar
                         </button>
-                        <button className="py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 cursor-not-allowed whitespace-nowrap">
-                            Events
+                        <button
+                            onClick={() => setActiveTab('events')}
+                            className={cn(
+                                "py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap",
+                                activeTab === 'events' ? "border-black text-black" : "border-transparent text-gray-500 hover:text-black"
+                            )}
+                        >
+                            Etkinlikler
                         </button>
                         <button className="py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 cursor-not-allowed whitespace-nowrap">
                             Lessons
@@ -103,9 +116,9 @@ export function BookmarksPopover() {
                     <div className="flex-1 overflow-y-auto bg-white">
                         {isLoading ? (
                             <div className="p-8 text-center text-sm text-gray-500">Yükleniyor...</div>
-                        ) : activeTab === 'posts' && bookmarks.length > 0 ? (
+                        ) : activeTab === 'posts' && posts.length > 0 ? (
                             <div className="divide-y">
-                                {bookmarks.map(post => (
+                                {posts.map(post => (
                                     <Link
                                         key={post.id}
                                         href={`/community/post/${post.id}`}
@@ -134,6 +147,49 @@ export function BookmarksPopover() {
                                                     <span className="bg-muted px-1.5 py-0.5 rounded text-[10px]">
                                                         {post.channel_name || 'Genel'}
                                                     </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </Link>
+                                ))}
+                            </div>
+                        ) : activeTab === 'events' && events.length > 0 ? (
+                            <div className="divide-y">
+                                {events.map(event => (
+                                    <Link
+                                        key={event.id}
+                                        href={`/community/${event.community?.slug}/${event.channel?.slug}`}
+                                        onClick={() => setOpen(false)}
+                                        className="block w-full p-4 hover:bg-gray-50 transition-colors text-left group"
+                                    >
+                                        <div className="flex items-start gap-4">
+                                            <div className="flex flex-col items-center justify-center w-12 h-12 rounded-lg bg-gray-50 border text-center shrink-0">
+                                                <span className="text-[10px] uppercase font-bold text-red-500">{format(new Date(event.start_time), 'MMM', { locale: tr })}</span>
+                                                <span className="text-lg font-bold text-gray-900">{format(new Date(event.start_time), 'd')}</span>
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <h4 className="font-bold text-sm mb-1 truncate group-hover:text-blue-600 transition-colors">
+                                                    {event.title}
+                                                </h4>
+                                                <div className="text-[11px] text-muted-foreground space-y-0.5">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <Calendar className="w-3 h-3" />
+                                                        {format(new Date(event.start_time), 'HH:mm', { locale: tr })} - {format(new Date(event.end_time), 'HH:mm')}
+                                                    </div>
+                                                    {event.event_type === 'online_zoom' ? (
+                                                        <div className="flex items-center gap-1.5 text-blue-600">
+                                                            <Video className="w-3 h-3" />
+                                                            Zoom
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex items-center gap-1.5 truncate">
+                                                            <MapPin className="w-3 h-3" />
+                                                            {event.location_address || 'Konum belirtilmedi'}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="mt-2 text-[10px] text-gray-400">
+                                                    {event.community?.name} • {event.channel?.name}
                                                 </div>
                                             </div>
                                         </div>

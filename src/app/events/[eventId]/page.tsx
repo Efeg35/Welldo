@@ -10,8 +10,11 @@ import {
     Users,
     Clock,
     ArrowLeft,
+    FileText,
+    Download
 } from "lucide-react";
 import Link from "next/link";
+import ReactMarkdown from "react-markdown";
 import { EventActions } from "./event-actions";
 import type { Event, Community, Ticket } from "@/types";
 
@@ -167,13 +170,72 @@ export default async function EventDetailPage({
 
                 <Separator />
 
-                {/* Description */}
+                {/* Description with Markdown & Video Embeds */}
                 {eventData.description && (
                     <div>
                         <h2 className="mb-2 font-semibold">Açıklama</h2>
-                        <p className="text-sm text-muted-foreground">
-                            {eventData.description}
-                        </p>
+                        <div className="text-sm text-muted-foreground prose prose-sm max-w-none dark:prose-invert">
+                            {(() => {
+                                const parts = eventData.description.split(/\[VIDEO:\s*(.*?)\]/g);
+                                return parts.map((part, index) => {
+                                    if (part.startsWith('http')) {
+                                        // Simple embed logic for YouTube/Vimeo
+                                        let embedUrl = part;
+                                        if (part.includes('youtube.com/watch?v=')) {
+                                            embedUrl = part.replace('watch?v=', 'embed/');
+                                        } else if (part.includes('youtu.be/')) {
+                                            embedUrl = part.replace('youtu.be/', 'www.youtube.com/embed/');
+                                        } else if (part.includes('vimeo.com/')) {
+                                            embedUrl = part.replace('vimeo.com/', 'player.vimeo.com/video/');
+                                        }
+
+                                        return (
+                                            <div key={index} className="aspect-video w-full my-4 rounded-lg overflow-hidden border border-border">
+                                                <iframe
+                                                    src={embedUrl}
+                                                    title="Video Embed"
+                                                    className="w-full h-full"
+                                                    allowFullScreen
+                                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                                />
+                                            </div>
+                                        );
+                                    } else {
+                                        // Render Markdown
+                                        return <ReactMarkdown key={index}>{part}</ReactMarkdown>;
+                                    }
+                                });
+                            })()}
+                        </div>
+                    </div>
+                )}
+
+                {/* Attachments */}
+                {eventData.attachments && eventData.attachments.length > 0 && (
+                    <div className="mt-6">
+                        <h2 className="mb-3 font-semibold text-lg">Ekli Dosyalar</h2>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                            {eventData.attachments.map((file: any, idx: number) => (
+                                <a
+                                    key={idx}
+                                    href={file.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-3 p-3 rounded-xl border border-border hover:bg-muted/50 transition-colors group"
+                                >
+                                    <div className="h-10 w-10 flex items-center justify-center rounded-lg bg-violet-50 text-violet-600">
+                                        <FileText className="h-5 w-5" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium truncate group-hover:underline">{file.name}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                            {file.size ? (file.size / 1024 / 1024).toFixed(2) + ' MB' : 'Dosya'}
+                                        </p>
+                                    </div>
+                                    <Download className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </a>
+                            ))}
+                        </div>
                     </div>
                 )}
             </div>

@@ -8,10 +8,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useState, useTransition, useEffect } from "react";
-import { updateEvent, publishEvent, unpublishEvent, getEvent, getEventStats } from "@/actions/events";
-import { getCommunityChannels } from "@/actions/community";
+import { updateEvent, publishEvent, unpublishEvent, getEvent, getEventStats, getEventAttendees, addEventAttendee } from "@/actions/events";
+import { getCommunityChannels, searchUsers } from "@/actions/community";
 import { toast } from "sonner";
-import { Loader2, X, MoreHorizontal, Calendar as CalendarIcon, Clock, HelpCircle, Settings, ArrowUpRight, Copy, Eye, Users, User } from "lucide-react";
+import { Loader2, X, MoreHorizontal, Calendar as CalendarIcon, Clock, HelpCircle, Settings, ArrowUpRight, Copy, Eye, Users, User, Download, UserPlus, Search, Plus, Image as ImageIcon, Paperclip, FileText, Video, Trash2 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 import { Event, EventStatus, EventType } from "@/types";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -36,7 +37,142 @@ export function EditEventModal({ isOpen, onClose, eventId, communityId, currentU
     const [event, setEvent] = useState<Event | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [stats, setStats] = useState<{ attendeeCount: number, latestAttendees: any[] } | null>(null);
+    const [attendees, setAttendees] = useState<any[]>([]);
+
+    // Add Attendee Search State
+    const [searchQuery, setSearchQuery] = useState("");
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
+    const [isAddingAttendee, setIsAddingAttendee] = useState(false);
+
+    // Post Details State
+    const [coverImage, setCoverImage] = useState<string | null>(null);
+    const [description, setDescription] = useState("");
+    const [attachments, setAttachments] = useState<any[]>([]);
+    const [isUploading, setIsUploading] = useState(false);
+
     const [isSaving, startTransition] = useTransition();
+
+    useEffect(() => {
+        if (event) {
+            setCoverImage(event.cover_image_url || null);
+            setDescription(event.description || "");
+            setAttachments(event.attachments || []);
+        }
+    }, [event]);
+
+    const uploadFile = async (file: File) => {
+        // Validation
+        const maxSize = 5 * 1024 * 1024; // 5MB
+        const allowedTypes = [
+            'application/pdf',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // docx
+            'application/vnd.ms-excel',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // xlsx
+            'image/jpeg',
+            'image/png'
+        ];
+
+        if (file.size > maxSize) {
+            toast.error("Dosya boyutu 5MB'dan küçük olmalıdır.");
+            throw new Error("File too large");
+        }
+
+        if (!allowedTypes.includes(file.type)) {
+            toast.error("Geçersiz dosya türü. Sadece PDF, Word, Excel ve Resim yükleyebilirsiniz.");
+            throw new Error("Invalid file type");
+        }
+
+        setIsUploading(true);
+        try {
+            const supabase = createClient();
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+            const filePath = `event-attachments/${fileName}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('public') // Assuming 'public' bucket exists and is public
+                .upload(filePath, file);
+
+            if (uploadError) throw uploadError;
+
+            const { data } = supabase.storage.from('public').getPublicUrl(filePath);
+            return data.publicUrl;
+        } catch (error: any) {
+            console.error("Upload error:", error);
+            toast.error("Dosya yüklenirken hata oluştu.");
+            throw error;
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    const handleCoverImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        try {
+            const url = await uploadFile(file);
+            setCoverImage(url);
+            toast.success("Kapak fotoğrafı yüklendi (Kaydetmeyi unutmayın)");
+        } catch (error) {
+            // Error handled in uploadFile
+        }
+    };
+
+    const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        try {
+            const url = await uploadFile(file);
+            const newAttachment = {
+                name: file.name,
+                url: url,
+                size: file.size,
+                type: file.type
+            };
+            setAttachments([...attachments, newAttachment]);
+            toast.success("Dosya eklendi (Kaydetmeyi unutmayın)");
+        } catch (error) {
+            // Error handled
+        }
+    };
+
+    const handleVideoEmbed = () => {
+        const url = window.prompt("Video bağlantısını yapıştırın (YouTube, Vimeo vb.):");
+        if (!url) return;
+
+        // Basic validation
+        if (!url.includes('http')) {
+            toast.error("Geçerli bir bağlantı giriniz.");
+            return;
+        }
+
+        const embedMarkdown = `\n[VIDEO: ${url}]\n`;
+        setDescription(prev => prev + embedMarkdown);
+    };
+
+    const handleSavePostDetails = async () => {
+        if (!event) return;
+        startTransition(async () => {
+            try {
+                await updateEvent(event.id, {
+                    coverImageUrl: coverImage || undefined,
+                    description: description,
+                    attachments: attachments
+                });
+                toast.success("Değişiklikler kaydedildi!");
+
+                // Refresh local event data
+                const updated = await getEvent(event.id);
+                setEvent(updated);
+            } catch (error) {
+                toast.error("Kaydetme başarısız.");
+            }
+        });
+    };
 
     // Fetch stats when Overview tab is active
     useEffect(() => {
@@ -46,6 +182,77 @@ export function EditEventModal({ isOpen, onClose, eventId, communityId, currentU
             });
         }
     }, [isOpen, eventId, activeTab]);
+
+    // Fetch attendees when People tab is active
+    useEffect(() => {
+        if (isOpen && eventId && activeTab === 'people') {
+            getEventAttendees(eventId).then((data) => {
+                setAttendees(data || []);
+            });
+        }
+    }, [isOpen, eventId, activeTab]);
+
+    // Debounced search for users
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (searchQuery.length >= 2) {
+                setIsSearching(true);
+                searchUsers(searchQuery, communityId).then((results) => {
+                    setSearchResults(results || []);
+                    setIsSearching(false);
+                });
+            } else {
+                setSearchResults([]);
+            }
+        }, 300);
+
+        return () => clearTimeout(timer);
+    }, [searchQuery, communityId]);
+
+    const handleAddAttendee = async (userId: string) => {
+        setIsAddingAttendee(true);
+        try {
+            await addEventAttendee(eventId, userId);
+            toast.success("Katılımcı eklendi!");
+
+            // Refresh list
+            const updated = await getEventAttendees(eventId);
+            setAttendees(updated || []);
+
+            // Clear search
+            setSearchQuery("");
+            setSearchResults([]);
+        } catch (error: any) {
+            toast.error(error.message || "Ekleme başarısız.");
+        } finally {
+            setIsAddingAttendee(false);
+        }
+    };
+
+    const handleDownloadCSV = () => {
+        if (!attendees.length) return;
+
+        const headers = ["ID", "Name", "Email", "Date Joined", "Status"];
+        const rows = attendees.map(t => [
+            t.id,
+            t.user?.full_name || "Unknown",
+            t.user?.email || "",
+            format(new Date(t.created_at), "yyyy-MM-dd HH:mm"),
+            "Confirmed"
+        ]);
+
+        const csvContent = "data:text/csv;charset=utf-8,"
+            + headers.join(",") + "\n"
+            + rows.map(e => e.join(",")).join("\n");
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `event_${eventId}_attendees.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     const handleTogglePublish = () => {
         if (!event) return;
@@ -276,9 +483,9 @@ export function EditEventModal({ isOpen, onClose, eventId, communityId, currentU
                     <div className="flex items-center overflow-x-auto no-scrollbar w-full md:w-auto -order-1 md:order-none py-2 md:py-0 border-b md:border-none border-gray-100">
                         <div className="flex items-center gap-1 mx-auto">
                             <TabButton id="overview" label="Genel Bakış" />
-                            <TabButton id="people" label="People" />
+                            <TabButton id="people" label="Kişiler" />
                             <TabButton id="basic_info" label="Temel Bilgiler" />
-                            <TabButton id="post_details" label="Post details" />
+                            <TabButton id="post_details" label="Detaylar" />
                             <TabButton id="notifications" label="Notifications" />
                             <TabButton id="reminders" label="Reminders" />
                             <TabButton id="advanced" label="Advanced" />
@@ -401,6 +608,271 @@ export function EditEventModal({ isOpen, onClose, eventId, communityId, currentU
                                         </div>
                                     )}
                                 </div>
+                            </div>
+                        ) : activeTab === 'people' ? (
+                            <div className="space-y-8 animate-in fade-in zoom-in-95 duration-200">
+                                <div className="space-y-6">
+                                    <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Katılımcılar</h1>
+
+                                    {/* Sub-tabs / Filter & Actions */}
+                                    <div className="flex items-center justify-between border-b border-gray-100 pb-0">
+                                        <div className="flex items-center gap-6">
+                                            <button className="pb-3 border-b-2 border-black font-semibold text-gray-900 text-sm">
+                                                Katılımcılar
+                                            </button>
+
+                                        </div>
+                                        <button
+                                            onClick={handleDownloadCSV}
+                                            className="flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-gray-900 pb-3"
+                                        >
+                                            CSV İndir
+                                            <Download className="w-4 h-4" />
+                                        </button>
+                                    </div>
+
+                                    {/* Action Row */}
+                                    <div className="flex items-center justify-between">
+                                        <h3 className="text-lg font-bold text-gray-900">{attendees.length} Katılımcı</h3>
+
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button variant="outline" className="rounded-full border-gray-300 font-medium h-9 px-4 text-gray-700 hover:bg-gray-50">
+                                                    <UserPlus className="w-4 h-4 mr-2" />
+                                                    Katılımcı Ekle
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-80 p-0" align="end">
+                                                <div className="p-3 border-b border-gray-100">
+                                                    <div className="relative">
+                                                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+                                                        <Input
+                                                            placeholder="İsim ile ara..."
+                                                            className="pl-9 bg-gray-50 border-gray-200"
+                                                            value={searchQuery}
+                                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="max-h-64 overflow-y-auto p-1">
+                                                    {isSearching ? (
+                                                        <div className="flex justify-center p-4">
+                                                            <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                                                        </div>
+                                                    ) : searchResults.length > 0 ? (
+                                                        <div className="space-y-1">
+                                                            {searchResults.map((user) => (
+                                                                <button
+                                                                    key={user.id}
+                                                                    onClick={() => handleAddAttendee(user.id)}
+                                                                    disabled={isAddingAttendee}
+                                                                    className="w-full flex items-center gap-3 p-2 hover:bg-gray-50 rounded-md text-left transition-colors group"
+                                                                >
+                                                                    <div className="h-8 w-8 rounded-full bg-gray-100 overflow-hidden flex-shrink-0">
+                                                                        {user.avatar_url ? (
+                                                                            <img src={user.avatar_url} alt={user.full_name} className="h-full w-full object-cover" />
+                                                                        ) : (
+                                                                            <div className="h-full w-full flex items-center justify-center bg-gray-200 text-gray-500">
+                                                                                <User className="h-4 w-4" />
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <p className="text-sm font-medium text-gray-900 truncate">{user.full_name}</p>
+                                                                        <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                                                                    </div>
+                                                                    <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                        <div className="h-7 w-7 flex items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                                                                            <Plus className="w-4 h-4" />
+                                                                        </div>
+                                                                    </div>
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    ) : searchQuery.length >= 2 ? (
+                                                        <div className="p-4 text-center text-sm text-gray-500">
+                                                            Sonuç bulunamadı
+                                                        </div>
+                                                    ) : (
+                                                        <div className="p-4 text-center text-sm text-gray-500">
+                                                            Aramak için yazın
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </PopoverContent>
+                                        </Popover>
+                                    </div>
+
+                                    {/* Attendees List */}
+                                    <div className="space-y-1">
+                                        {attendees.length > 0 ? (
+                                            <div className="divide-y divide-gray-100 border rounded-xl border-gray-100 overflow-hidden">
+                                                {attendees.map((attendee) => (
+                                                    <div key={attendee.id} className="flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors bg-white">
+                                                        <div className="h-10 w-10 rounded-full bg-gray-100 overflow-hidden flex-shrink-0">
+                                                            {attendee.user?.avatar_url ? (
+                                                                <img src={attendee.user.avatar_url} alt={attendee.user.full_name} className="h-full w-full object-cover" />
+                                                            ) : (
+                                                                <div className="h-full w-full flex items-center justify-center bg-gray-200 text-gray-500">
+                                                                    <User className="h-5 w-5" />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-sm font-semibold text-gray-900 truncate">{attendee.user?.full_name || "İsimsiz Kullanıcı"}</p>
+                                                            <p className="text-xs text-gray-500 truncate">{attendee.user?.email}</p>
+                                                        </div>
+                                                        <div className="text-right text-xs text-gray-500">
+                                                            {format(new Date(attendee.created_at), "d MMM yyyy", { locale: tr })}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            /* Empty State */
+                                            <div className="text-center py-20 bg-gray-50/50 rounded-xl border border-dashed border-gray-200">
+                                                <p className="text-gray-500">Henüz katılımcı yok</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        ) : activeTab === 'post_details' ? (
+                            <div className="space-y-8 animate-in fade-in zoom-in-95 duration-200">
+                                <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Detaylar</h1>
+
+                                {/* Cover Image */}
+                                <div className="space-y-4">
+                                    <h3 className="text-lg font-bold text-gray-900">Kapak Görseli</h3>
+                                    {coverImage ? (
+                                        <div className="relative group rounded-xl overflow-hidden border border-gray-200">
+                                            <img src={coverImage} alt="Cover" className="w-full h-48 object-cover" />
+                                            <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <Button size="icon" variant="destructive" className="h-8 w-8 rounded-full" onClick={() => setCoverImage(null)}>
+                                                    <Trash2 className="w-4 h-4" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 flex flex-col items-center justify-center gap-3 transition-colors hover:bg-gray-50 hover:border-gray-300">
+                                            <div className="h-12 w-12 bg-gray-100 rounded-full flex items-center justify-center">
+                                                <ImageIcon className="w-6 h-6 text-gray-400" />
+                                            </div>
+                                            <div className="text-center">
+                                                <button className="text-base font-semibold text-gray-900 hover:underline relative">
+                                                    Görsel Yükle
+                                                    <input
+                                                        type="file"
+                                                        className="absolute inset-0 opacity-0 cursor-pointer"
+                                                        accept="image/*"
+                                                        onChange={handleCoverImageUpload}
+                                                    />
+                                                </button>
+                                                <p className="text-sm text-gray-500">Önerilen boyut: 1024x366</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Description */}
+                                <div className="space-y-4">
+                                    <h3 className="text-lg font-bold text-gray-900">Etkinlik Açıklaması</h3>
+                                    <div className="border border-gray-200 rounded-xl overflow-hidden focus-within:ring-1 focus-within:ring-black focus-within:border-black transition-all bg-white">
+                                        <textarea
+                                            value={description}
+                                            onChange={(e) => setDescription(e.target.value)}
+                                            placeholder="Etkinliğinizi anlatın..."
+                                            className="w-full min-h-[300px] p-6 resize-y focus:outline-none text-base text-gray-900 placeholder:text-gray-400"
+                                        />
+
+                                        {/* Toolbar */}
+                                        <div className="bg-gray-50 border-t border-gray-100 px-4 py-3 flex items-center gap-2">
+                                            <Button
+                                                variant="ghost" size="icon" className="h-8 w-8 text-gray-500 hover:text-gray-900 hover:bg-gray-200/50"
+                                                onClick={handleVideoEmbed}
+                                                title="Video Ekle (Embed)"
+                                            >
+                                                <Video className="w-4 h-4" />
+                                            </Button>
+                                            <div className="relative">
+                                                <Button
+                                                    variant="ghost" size="icon" className="h-8 w-8 text-gray-500 hover:text-gray-900 hover:bg-gray-200/50"
+                                                >
+                                                    <ImageIcon className="w-4 h-4" />
+                                                </Button>
+                                                <input
+                                                    type="file"
+                                                    className="absolute inset-0 opacity-0 cursor-pointer"
+                                                    accept="image/*"
+                                                    onChange={async (e) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (!file) return;
+                                                        try {
+                                                            const url = await uploadFile(file);
+                                                            setDescription(prev => prev + `\n![image](${url})`);
+                                                            toast.success("Resim eklendi");
+                                                        } catch (err) { }
+                                                    }}
+                                                />
+                                            </div>
+                                            <div className="relative">
+                                                <Button
+                                                    variant="ghost" size="icon" className="h-8 w-8 text-gray-500 hover:text-gray-900 hover:bg-gray-200/50"
+                                                    title="Dosya Ekle"
+                                                >
+                                                    <Paperclip className="w-4 h-4" />
+                                                </Button>
+                                                <input
+                                                    type="file"
+                                                    className="absolute inset-0 opacity-0 cursor-pointer"
+                                                    onChange={handleAttachmentUpload}
+                                                />
+                                            </div>
+
+                                            <div className="ml-auto">
+                                                {isUploading && <Loader2 className="w-4 h-4 animate-spin text-gray-400" />}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-end">
+                                        <Button onClick={handleSavePostDetails} disabled={isSaving || isUploading} className="rounded-full px-6">
+                                            {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                                            Kaydet
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                {/* Attachments List */}
+                                {attachments.length > 0 && (
+                                    <div className="space-y-4 pt-4 border-t border-gray-100">
+                                        <h3 className="text-lg font-bold text-gray-900">Ekli Dosyalar</h3>
+                                        <div className="space-y-2">
+                                            {attachments.map((file, idx) => (
+                                                <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100 group">
+                                                    <div className="flex items-center gap-3 overflow-hidden">
+                                                        <div className="h-8 w-8 bg-white rounded-md border border-gray-200 flex items-center justify-center flex-shrink-0">
+                                                            <FileText className="w-4 h-4 text-blue-500" />
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>
+                                                            <p className="text-xs text-gray-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                                                        </div>
+                                                    </div>
+                                                    <Button
+                                                        variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-red-500"
+                                                        onClick={() => {
+                                                            const newAtt = [...attachments];
+                                                            newAtt.splice(idx, 1);
+                                                            setAttachments(newAtt);
+                                                        }}
+                                                    >
+                                                        <X className="w-4 h-4" />
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         ) : activeTab === 'basic_info' ? (
                             <div className="space-y-12 animate-in fade-in zoom-in-95 duration-200">

@@ -107,13 +107,17 @@ export interface Event {
     cover_image_url: string | null;
     is_paid: boolean;
     topics: string[] | null;
+    attachments?: any[] | null;
     recurrence?: string | null;
     organizer_id?: string | null;
     created_at: string;
     updated_at: string;
+    is_pinned: boolean;
     // Joined fields
     community?: Community;
     ticket_count?: number;
+    bookmarks?: { user_id: string }[];
+    bookmarked?: boolean;
 }
 
 export interface Post {
