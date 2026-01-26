@@ -30,9 +30,10 @@ interface CreateEventModalProps {
         avatar_url?: string | null;
         iyzico_sub_merchant_key?: string | null;
     };
+    onDraftCreated?: (eventId: string) => void;
 }
 
-export function CreateEventModal({ isOpen, onClose, communityId, channelId: initialChannelId, currentUser }: CreateEventModalProps) {
+export function CreateEventModal({ isOpen, onClose, communityId, channelId: initialChannelId, currentUser, onDraftCreated }: CreateEventModalProps) {
     // Section 1: What
     const [title, setTitle] = useState("");
     const [selectedChannelId, setSelectedChannelId] = useState(initialChannelId);
@@ -118,7 +119,7 @@ export function CreateEventModal({ isOpen, onClose, communityId, channelId: init
             try {
                 const isPaid = isPaidEvent === "paid";
 
-                await createEvent({
+                const newEvent = await createEvent({
                     communityId,
                     channelId: selectedChannelId,
                     title,
@@ -137,10 +138,15 @@ export function CreateEventModal({ isOpen, onClose, communityId, channelId: init
                     isPaid,
                     ticketPrice: isPaid ? parseFloat(ticketPrice) : 0,
                     recurrence: repeatFrequency,
+                    status: 'draft',
                 });
 
-                toast.success("Etkinlik başarıyla oluşturuldu!");
+                toast.success("Taslak oluşturuldu!");
                 onClose();
+
+                if (onDraftCreated && newEvent) {
+                    onDraftCreated(newEvent.id);
+                }
 
                 // Reset form
                 setTitle("");
@@ -390,33 +396,21 @@ export function CreateEventModal({ isOpen, onClose, communityId, channelId: init
 
                             {eventType === 'welldo_live' && (
                                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                                    <div className="space-y-3 pt-2">
-                                        <div className="flex items-start justify-between py-3 border-b border-gray-100">
-                                            <div className="flex-1 pr-4">
-                                                <Label className="text-base font-medium text-gray-900 cursor-pointer block">⏺️ Canlı yayını kaydet (30 Günlük)</Label>
-                                                <p className="text-sm text-gray-500 mt-1">Yayın bittikten sonra kayıt otomatik olarak derslere eklenir ve 30 gün boyunca izlenebilir. Sonrasında silinir.</p>
-                                            </div>
+                                    <div className="space-y-4 pt-4">
+                                        <div className="flex items-center justify-between">
+                                            <Label className="text-base font-bold text-gray-900 cursor-pointer">Canlı yayını kaydet (30 Günlük)</Label>
                                             <Switch checked={recordLive} onCheckedChange={setRecordLive} />
                                         </div>
-                                        <div className="flex items-start justify-between py-3 border-b border-gray-100">
-                                            <div className="flex-1 pr-4">
-                                                <Label className="text-base font-medium text-gray-900 cursor-pointer block">🔇 Katılımcılar sessiz başlasın</Label>
-                                                <p className="text-sm text-gray-500 mt-1">Odaya girenlerin mikrofonu kapalı olur.</p>
-                                            </div>
+                                        <div className="flex items-center justify-between">
+                                            <Label className="text-base font-bold text-gray-900 cursor-pointer">Katılımcılar sessiz başlasın</Label>
                                             <Switch checked={muteParticipants} onCheckedChange={setMuteParticipants} />
                                         </div>
-                                        <div className="flex items-start justify-between py-3 border-b border-gray-100">
-                                            <div className="flex-1 pr-4">
-                                                <Label className="text-base font-medium text-gray-900 cursor-pointer block">💬 Sohbeti devre dışı bırak</Label>
-                                                <p className="text-sm text-gray-500 mt-1">Yayın sırasında chat penceresi gizlenir.</p>
-                                            </div>
+                                        <div className="flex items-center justify-between">
+                                            <Label className="text-base font-bold text-gray-900 cursor-pointer">Sohbeti devre dışı bırak</Label>
                                             <Switch checked={disableChat} onCheckedChange={setDisableChat} />
                                         </div>
-                                        <div className="flex items-start justify-between py-3">
-                                            <div className="flex-1 pr-4">
-                                                <Label className="text-base font-medium text-gray-900 cursor-pointer block">🙈 Katılımcı listesini gizle</Label>
-                                                <p className="text-sm text-gray-500 mt-1">Katılımcılar birbirlerini göremez.</p>
-                                            </div>
+                                        <div className="flex items-center justify-between">
+                                            <Label className="text-base font-bold text-gray-900 cursor-pointer">Katılımcı listesini gizle</Label>
                                             <Switch checked={hideParticipantsList} onCheckedChange={setHideParticipantsList} />
                                         </div>
                                     </div>
@@ -494,7 +488,7 @@ export function CreateEventModal({ isOpen, onClose, communityId, channelId: init
                         className="h-10 px-6 rounded-full bg-gray-900 text-white hover:bg-black shadow-none font-medium"
                     >
                         {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                        Taslağı kaydet
+                        Taslağı Oluştur
                     </Button>
                 </div>
             </SheetContent >

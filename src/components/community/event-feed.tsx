@@ -25,15 +25,22 @@ interface EventFeedProps {
     members?: Profile[];
 }
 
+import { EditEventModal } from "./edit-event-modal";
+
 export function EventFeed({ channel, user, initialEvents, members = [] }: EventFeedProps) {
     const [filter, setFilter] = useState<'upcoming' | 'past'>('upcoming');
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [editEventId, setEditEventId] = useState<string | null>(null);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const isInstructor = user?.role === 'instructor' || user?.role === 'admin';
 
     // Settings
     const settings = channel.settings || {};
+
+    const handleDraftCreated = (eventId: string) => {
+        setEditEventId(eventId);
+    };
 
     return (
         <div className="flex flex-col h-full bg-[#FAFAFA]">
@@ -189,7 +196,18 @@ export function EventFeed({ channel, user, initialEvents, members = [] }: EventF
                 channelId={channel.id}
                 communityId={channel.community_id}
                 currentUser={user}
+                onDraftCreated={handleDraftCreated}
             />
+
+            {editEventId && (
+                <EditEventModal
+                    isOpen={!!editEventId}
+                    onClose={() => setEditEventId(null)}
+                    eventId={editEventId}
+                    communityId={channel.community_id}
+                    currentUser={user}
+                />
+            )}
             <DeleteSpaceDialog
                 isOpen={isDeleteModalOpen}
                 onClose={() => setIsDeleteModalOpen(false)}

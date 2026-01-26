@@ -1,6 +1,7 @@
 // Database Types for WellDo
 
 export type UserRole = "member" | "instructor" | "admin";
+export type EventStatus = "draft" | "published" | "archived";
 export type EventType = "online_zoom" | "physical" | "tbd" | "welldo_live";
 export type MembershipStatus = "active" | "cancelled" | "past_due";
 export type ChannelType = "post" | "chat" | "event" | "course";
@@ -95,6 +96,7 @@ export interface Event {
     title: string;
     description: string | null;
     event_type: EventType;
+    status: EventStatus;
     location_address: string | null;
     zoom_meeting_id: string | null;
     zoom_password: string | null;
@@ -106,6 +108,7 @@ export interface Event {
     is_paid: boolean;
     topics: string[] | null;
     recurrence?: string | null;
+    organizer_id?: string | null;
     created_at: string;
     updated_at: string;
     // Joined fields
