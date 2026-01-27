@@ -183,12 +183,12 @@ export function EditEventModal({ isOpen, onClose, eventId, communityId, currentU
             const filePath = `event-attachments/${fileName}`;
 
             const { error: uploadError } = await supabase.storage
-                .from('public') // Assuming 'public' bucket exists and is public
+                .from('event-images')
                 .upload(filePath, file);
 
             if (uploadError) throw uploadError;
 
-            const { data } = supabase.storage.from('public').getPublicUrl(filePath);
+            const { data } = supabase.storage.from('event-images').getPublicUrl(filePath);
             return data.publicUrl;
         } catch (error: any) {
             console.error("Upload error:", error);
@@ -244,7 +244,12 @@ export function EditEventModal({ isOpen, onClose, eventId, communityId, currentU
         try {
             const url = await uploadFile(file);
             setCoverImage(url);
-            toast.success("Kapak fotoğrafı yüklendi (Kaydetmeyi unutmayın)");
+
+            // Auto-save cover image immediately
+            if (event) {
+                await updateEvent(event.id, { coverImageUrl: url });
+                toast.success("Kapak fotoğrafı yüklendi ve kaydedildi!");
+            }
         } catch (error) {
             // Error handled in uploadFile
         }
@@ -532,6 +537,7 @@ export function EditEventModal({ isOpen, onClose, eventId, communityId, currentU
                 isPaid,
                 ticketPrice: isPaid ? parseFloat(ticketPrice) : 0,
                 recurrence: repeatFrequency,
+                coverImageUrl: coverImage || undefined,
                 settings,
             });
 
@@ -1068,7 +1074,11 @@ export function EditEventModal({ isOpen, onClose, eventId, communityId, currentU
                                         </div>
                                     </div>
                                     <div className="flex justify-end">
-                                        <Button onClick={handleSavePostDetails} disabled={isSaving || isUploading} className="rounded-full px-6">
+                                        <Button
+                                            onClick={handleSavePostDetails}
+                                            disabled={isSaving || isUploading}
+                                            className="rounded-full px-6 bg-[#1c1c1c] hover:bg-black text-white shadow-sm border-none"
+                                        >
                                             {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                                             Kaydet
                                         </Button>
@@ -1454,8 +1464,7 @@ export function EditEventModal({ isOpen, onClose, eventId, communityId, currentU
                                     <Button
                                         onClick={() => handleSave(true)}
                                         disabled={isSaving}
-                                        variant="outline"
-                                        className="px-8"
+                                        className="px-8 rounded-full bg-[#1c1c1c] hover:bg-black text-white shadow-sm border-none"
                                     >
                                         {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                                         Değişiklikleri kaydet

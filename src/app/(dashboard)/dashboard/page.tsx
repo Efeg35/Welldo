@@ -53,8 +53,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     const availableChannels = spaces;
 
     return (
-        <div className="flex flex-col h-full bg-[#FAFAFA]"> {/* Distinct light gray background */}
-            <div className="flex-1 overflow-y-auto relative">
+        <div className="bg-[#FAFAFA] min-h-full"> {/* Distinct light gray background */}
+            <div className="relative">
 
                 {/* Header Toolbar - Full Width Background */}
                 <div className="sticky top-0 z-10 bg-white border-b border-border shadow-sm w-full">

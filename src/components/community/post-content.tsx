@@ -28,8 +28,8 @@ export function PostContent({ post: initialPost, user }: PostContentProps) {
     const [isPending, startTransition] = useTransition();
     const [post, setPost] = useState(initialPost);
 
-    const hasLiked = post.post_likes?.some((like: any) => like.user_id === user.id) || false;
-    const initialLikeCount = post._count?.post_likes || 0;
+    const hasLiked = post.likes?.some((like: any) => like.user_id === user.id) || false;
+    const initialLikeCount = post._count?.likes || 0;
 
     const [optimisticLike, addOptimisticLike] = useOptimistic(
         { hasLiked, likeCount: initialLikeCount },

@@ -128,9 +128,9 @@ export function CourseFeed({ channel, user, course, isPurchased = false, isInstr
     }
 
     return (
-        <div className="flex h-full bg-white">
+        <div className="bg-white min-h-full">
             {/* Main Content */}
-            <div className="flex-1 p-8 overflow-y-auto">
+            <div className="flex-1 p-8">
                 <div className="max-w-4xl mx-auto">
                     {/* Course Header */}
                     <div className="mb-12">

@@ -17,7 +17,7 @@ export async function getPosts(channelId?: string, sort: string = 'latest', topi
                 avatar_url,
                 role
             ),
-            post_likes (
+            likes (
                 user_id
             ),
             bookmarks (
@@ -66,14 +66,14 @@ export async function getPosts(channelId?: string, sort: string = 'latest', topi
     let posts = data.map((post: any) => ({
         ...post,
         _count: {
-            post_likes: post.post_likes?.length || 0,
+            likes: post.likes?.length || 0,
             comments: post.comments?.[0]?.count || 0
         }
     }));
 
     // In-memory sort for popular (since we can't easily order by relation count in standard Supabase select without RPC/View)
     if (sort === 'popular') {
-        posts.sort((a: any, b: any) => b._count.post_likes - a._count.post_likes);
+        posts.sort((a: any, b: any) => b._count.likes - a._count.likes);
     }
 
     return posts;
@@ -940,7 +940,7 @@ export async function getPost(postId: string) {
                 avatar_url,
                 role
             ),
-            post_likes (
+            likes (
                 user_id
             ),
             bookmarks (
@@ -967,7 +967,7 @@ export async function getPost(postId: string) {
     return {
         ...data,
         _count: {
-            post_likes: data.post_likes?.length || 0,
+            likes: data.likes?.length || 0,
             comments: data.comments?.length || 0
         }
     };
@@ -991,7 +991,7 @@ export async function getBookmarkedPosts() {
                     avatar_url,
                     role
                 ),
-                post_likes ( user_id ),
+                likes ( user_id ),
                 comments ( count ),
                 channel_id (
                   id,
@@ -1017,7 +1017,7 @@ export async function getBookmarkedPosts() {
                 ...post,
                 channel_name: post.channel_id?.name || 'Genel',
                 _count: {
-                    post_likes: post.post_likes?.length || 0,
+                    likes: post.likes?.length || 0,
                     comments: post.comments?.[0]?.count || 0
                 }
             };

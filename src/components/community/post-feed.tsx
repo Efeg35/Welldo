@@ -55,8 +55,8 @@ export function PostFeed({ channel, user, posts, communityId, channels = [], mem
     };
 
     return (
-        <div className="flex flex-col h-full bg-[#FAFAFA]">
-            <div className="flex-1 overflow-y-auto relative">
+        <div className="bg-[#FAFAFA] min-h-full">
+            <div className="relative">
 
                 {/* Cover Image */}
                 {settings.cover_image_url && (

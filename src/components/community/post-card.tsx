@@ -57,11 +57,11 @@ export function PostCard({ post, currentUserId, onClick }: PostCardProps) {
 
     // Check if current user has liked
     // Check if current user has liked
-    const hasLiked = post.post_likes?.some((like) => like.user_id === currentUserId) || false;
+    const hasLiked = post.likes?.some((like) => like.user_id === currentUserId) || false;
     const hasBookmarked = post.bookmarks?.some((b: any) => b.user_id === currentUserId) || false;
 
     // Fallback logic for like count
-    const initialLikeCount = post._count?.post_likes ?? post.post_likes?.length ?? 0;
+    const initialLikeCount = post._count?.likes ?? post.likes?.length ?? 0;
 
     // Optimistic UI for likes
     const [optimisticState, addOptimisticState] = useOptimistic(

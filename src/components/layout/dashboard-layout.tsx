@@ -37,27 +37,27 @@ export function DashboardLayout({
             <Header />
 
             {/* Main Content Area */}
-            <div className="flex flex-1 overflow-hidden">
-                {/* Left Sidebar */}
+            <div className="flex flex-1">
+                {/* Left Sidebar - Sticky */}
                 {showSidebar && (
                     <div className="hidden lg:block w-64 shrink-0">
-                        <Sidebar
-                            communityName={communityName}
-                            spaces={spaces}
-                            groups={groups}
-                            links={links}
-                            user={user}
-                            userRole={userRole}
-                            enabledFeatures={enabledFeatures}
-                        />
+                        <div className="sticky top-[64px] h-[calc(100vh-64px)] border-r border-border overflow-hidden">
+                            <Sidebar
+                                communityName={communityName}
+                                spaces={spaces}
+                                groups={groups}
+                                links={links}
+                                user={user}
+                                userRole={userRole}
+                                enabledFeatures={enabledFeatures}
+                            />
+                        </div>
                     </div>
                 )}
 
-                {/* Main Content */}
-                <main className="flex-1 flex flex-col overflow-hidden">
-                    <div className="flex-1 overflow-hidden">
-                        {children}
-                    </div>
+                {/* Main Content - Natural Flow */}
+                <main className="flex-1 min-w-0 bg-[#FAFAFA]">
+                    {children}
                 </main>
             </div>
             <Toaster />

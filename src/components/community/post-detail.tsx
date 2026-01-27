@@ -31,7 +31,7 @@ export function PostDetail({ post, user }: PostDetailProps) {
                 </div>
             </div>
 
-            <div className="max-w-4xl mx-auto w-full px-0 md:px-6 py-0 md:py-8 overflow-y-auto flex-1">
+            <div className="max-w-4xl mx-auto w-full px-0 md:px-6 py-0 md:py-8 flex-1">
                 <div className="bg-white border-x md:border border-border md:rounded-xl shadow-sm overflow-hidden">
                     <PostContent post={post} user={user} />
                 </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,7 +35,7 @@ import {
     setEventResponse,
     removeEventResponse
 } from "@/actions/events";
-import { format } from "date-fns";
+import { format, formatDistanceToNow, isThisMonth, isThisYear, startOfMonth } from "date-fns";
 import { tr } from "date-fns/locale";
 import {
     DropdownMenu,
@@ -68,6 +68,33 @@ interface EventFeedProps {
 
 import { EditEventModal } from "./edit-event-modal";
 
+// Helper to group events by month
+function groupEventsByMonth(events: Event[]): Map<string, Event[]> {
+    const groups = new Map<string, Event[]>();
+    events.forEach(event => {
+        const monthKey = format(new Date(event.start_time), 'MMMM yyyy', { locale: tr });
+        if (!groups.has(monthKey)) {
+            groups.set(monthKey, []);
+        }
+        groups.get(monthKey)!.push(event);
+    });
+    return groups;
+}
+
+// Helper to calculate "Starts in X days" text
+function getStartsInText(startTime: string): string | null {
+    const now = new Date();
+    const start = new Date(startTime);
+    const diffMs = start.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) return null;
+    if (diffDays === 0) return "Bugün";
+    if (diffDays === 1) return "Yarın";
+    if (diffDays <= 7) return `${diffDays} gün sonra`;
+    return null;
+}
+
 export function EventFeed({ channel, user, initialEvents, members = [] }: EventFeedProps) {
     const router = useRouter();
     const [filter, setFilter] = useState<'upcoming' | 'past' | 'draft'>('upcoming');
@@ -88,6 +115,19 @@ export function EventFeed({ channel, user, initialEvents, members = [] }: EventF
 
     // Settings
     const settings = channel.settings || {};
+
+    // Separate next event from the rest
+    const { nextEvent, remainingEvents, groupedEvents } = useMemo(() => {
+        if (filter !== 'upcoming' || events.length === 0) {
+            return { nextEvent: null, remainingEvents: events, groupedEvents: groupEventsByMonth(events) };
+        }
+        const [first, ...rest] = events;
+        return {
+            nextEvent: first,
+            remainingEvents: rest,
+            groupedEvents: groupEventsByMonth(rest)
+        };
+    }, [events, filter]);
 
     const handleDraftCreated = (eventId: string) => {
         setEditEventId(eventId);
@@ -122,9 +162,421 @@ export function EventFeed({ channel, user, initialEvents, members = [] }: EventF
         refreshEvents();
     }, [filter, channel.id]);
 
+    // RSVP handler for optimistic updates
+    const handleRSVP = async (event: Event, status: 'attending' | 'not_attending') => {
+        const updatedEvents = events.map(ev => {
+            if (ev.id === event.id) {
+                const existingResponse = ev.responses?.find(r => r.user_id === user.id);
+                if (existingResponse) {
+                    return {
+                        ...ev,
+                        responses: ev.responses?.map(r =>
+                            r.user_id === user.id ? { ...r, status } : r
+                        )
+                    };
+                } else {
+                    return {
+                        ...ev,
+                        responses: [...(ev.responses || []), {
+                            user_id: user.id,
+                            status,
+                            user: {
+                                id: user.id,
+                                full_name: user.full_name || 'Kullanıcı',
+                                avatar_url: user.avatar_url || null
+                            }
+                        }]
+                    };
+                }
+            }
+            return ev;
+        });
+        setEvents(updatedEvents as Event[]);
+
+        try {
+            await setEventResponse(event.id, status);
+            if (status === 'attending') {
+                setSuccessEvent(event);
+                setShowSuccessModal(true);
+            } else {
+                toast.success("Katılım iptal edildi");
+            }
+        } catch (error: any) {
+            await refreshEvents();
+            toast.error(error.message || "Bir hata oluştu");
+        }
+    };
+
+    // Render RSVP/Ticket Button
+    const renderActionButton = (event: Event, size: 'sm' | 'default' = 'sm') => {
+        if (event.status !== 'published') return null;
+
+        const userResponse = event.responses?.find(r => r.user_id === user.id);
+
+        if (event.ticket_price > 0) {
+            // Paid event
+            if (event.tickets?.some(t => t.user_id === user.id)) {
+                return (
+                    <div className="h-8 px-3 rounded-full text-sm font-medium bg-green-50 text-green-700 border border-green-200 flex items-center gap-1.5 shadow-sm">
+                        <CheckCircle2 className="w-4 h-4 fill-green-600 text-white" />
+                        Biletli
+                    </div>
+                );
+            }
+            return (
+                <Button
+                    variant="default"
+                    size={size}
+                    className="h-8 px-4 rounded-full text-sm font-medium bg-[#1c1c1c] hover:bg-black text-white shadow-sm"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/events/${event.id}`);
+                    }}
+                >
+                    Bilet Al - ₺{event.ticket_price}
+                </Button>
+            );
+        }
+
+        // Free event - RSVP
+        return (
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button
+                        variant="ghost"
+                        size={size}
+                        className={cn(
+                            "h-8 px-3 rounded-full text-sm font-medium transition-colors border shadow-sm",
+                            userResponse?.status === 'attending'
+                                ? "bg-white text-green-700 hover:text-green-800 border-gray-200 hover:bg-gray-50"
+                                : "bg-white text-gray-700 hover:text-gray-900 border-gray-200 hover:bg-gray-50"
+                        )}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {userResponse?.status === 'attending' ? (
+                            <>
+                                <CheckCircle2 className="w-4 h-4 mr-1.5 fill-green-600 text-white" />
+                                Katılıyorum
+                            </>
+                        ) : userResponse?.status === 'not_attending' ? (
+                            <>
+                                <XCircle className="w-4 h-4 mr-1.5 text-gray-600" />
+                                Katılmıyorum
+                            </>
+                        ) : (
+                            <>
+                                Durumunu seç
+                                <ChevronDown className="w-3 h-3 ml-1.5 opacity-50" />
+                            </>
+                        )}
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-40 rounded-xl shadow-lg border-gray-200 p-1">
+                    <DropdownMenuItem
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            handleRSVP(event, 'attending');
+                        }}
+                        className="cursor-pointer flex items-center justify-between"
+                    >
+                        <div className="flex items-center">
+                            <CheckCircle2 className={cn(
+                                "w-4 h-4 mr-2",
+                                userResponse?.status === 'attending' ? "text-green-600" : "text-gray-400"
+                            )} />
+                            <span>Katılıyorum</span>
+                        </div>
+                        {userResponse?.status === 'attending' && (
+                            <div className="w-2 h-2 rounded-full bg-green-600" />
+                        )}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            handleRSVP(event, 'not_attending');
+                        }}
+                        className="cursor-pointer flex items-center justify-between"
+                    >
+                        <div className="flex items-center">
+                            <XCircle className={cn(
+                                "w-4 h-4 mr-2",
+                                userResponse?.status === 'not_attending' ? "text-gray-600" : "text-gray-400"
+                            )} />
+                            <span>Katılmıyorum</span>
+                        </div>
+                        {userResponse?.status === 'not_attending' && (
+                            <div className="w-2 h-2 rounded-full bg-gray-600" />
+                        )}
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
+        );
+    };
+
+    // Render 3-dot menu (preserved from original)
+    const renderEventMenu = (event: Event) => (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <MoreHorizontal className="h-4 w-4" />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 rounded-xl shadow-lg">
+                <DropdownMenuItem
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        handleAction(() => toggleEventBookmark(event.id), "Etkinlik kaydedildi");
+                    }}
+                    className="cursor-pointer"
+                >
+                    <Bookmark className={cn("h-4 w-4 mr-2", event.bookmarks?.some(b => b.user_id === user.id) && "fill-current text-blue-600")} />
+                    <span>{event.bookmarks?.some(b => b.user_id === user.id) ? "Kaydedilenlerden çıkar" : "Etkinliği kaydet"}</span>
+                </DropdownMenuItem>
+
+                {isInstructor && (
+                    <>
+                        <DropdownMenuItem
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setEditEventId(event.id);
+                            }}
+                            className="cursor-pointer"
+                        >
+                            <Edit2 className="h-4 w-4 mr-2" />
+                            <span>Etkinliği düzenle</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleAction(() => duplicateEvent(event.id), "Etkinlik çoğaltıldı");
+                            }}
+                            className="cursor-pointer"
+                        >
+                            <Copy className="h-4 w-4 mr-2" />
+                            <span>Etkinliği çoğalt</span>
+                        </DropdownMenuItem>
+
+                        {event.status === 'draft' ? (
+                            <DropdownMenuItem
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleAction(() => publishEvent(event.id), "Etkinlik yayınlandı");
+                                }}
+                                className="cursor-pointer text-green-600 focus:text-green-700"
+                            >
+                                <Eye className="h-4 w-4 mr-2" />
+                                <span>Etkinliği yayınla</span>
+                            </DropdownMenuItem>
+                        ) : (
+                            <DropdownMenuItem
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleAction(() => unpublishEvent(event.id), "Etkinlik taslağa çekildi");
+                                }}
+                                className="cursor-pointer text-orange-600 focus:text-orange-700"
+                            >
+                                <EyeOff className="h-4 w-4 mr-2" />
+                                <span>Taslağa geri çek</span>
+                            </DropdownMenuItem>
+                        )}
+
+                        <DropdownMenuSeparator />
+
+                        <div className="flex items-center justify-between px-2 py-1.5" onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center">
+                                <Pin className={cn("h-4 w-4 mr-2", event.is_pinned && "fill-current text-blue-600")} />
+                                <span className="text-sm">Sabitle</span>
+                            </div>
+                            <Switch
+                                checked={event.is_pinned}
+                                onCheckedChange={(checked) => {
+                                    handleAction(() => toggleEventPin(event.id, checked), checked ? "Etkinlik sabitlendi" : "Sabitleme kaldırıldı");
+                                }}
+                                className="scale-75"
+                            />
+                        </div>
+
+                        <DropdownMenuSeparator />
+
+                        <DropdownMenuItem
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteEventId(event.id);
+                            }}
+                            className="cursor-pointer text-red-600 focus:text-red-700 focus:bg-red-50"
+                        >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            <span>Etkinliği sil</span>
+                        </DropdownMenuItem>
+                    </>
+                )}
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+
+    // Featured Event Card Component (Large)
+    const FeaturedEventCard = ({ event }: { event: Event }) => {
+        const startsIn = getStartsInText(event.start_time);
+        const attendeeCount = event.responses?.filter(r => r.status === 'attending').length || 0;
+
+        return (
+            <div
+                onClick={() => router.push(`/events/${event.id}`)}
+                className="bg-white rounded-xl border shadow-sm overflow-hidden cursor-pointer group hover:shadow-lg transition-all"
+            >
+                {/* Cover Image */}
+                <div className="relative w-full h-48 md:h-64 overflow-hidden">
+                    {event.cover_image_url ? (
+                        <img
+                            src={event.cover_image_url}
+                            alt={event.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                    ) : (
+                        <div
+                            className="w-full h-full"
+                            style={{
+                                background: `repeating-linear-gradient(
+                                    135deg,
+                                    #e2e8f0,
+                                    #e2e8f0 1px,
+                                    #f1f5f9 1px,
+                                    #f1f5f9 12px
+                                )`
+                            }}
+                        />
+                    )}
+                </div>
+
+                {/* Content */}
+                <div className="p-5">
+                    <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                            <h3 className="text-xl font-bold text-foreground group-hover:text-violet-600 transition-colors truncate">
+                                {event.title}
+                            </h3>
+                            <p className="text-sm text-muted-foreground mt-1">
+                                {format(new Date(event.start_time), "EEEE, d MMMM, HH:mm", { locale: tr })} - {format(new Date(event.end_time), "HH:mm")}
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
+                            {renderActionButton(event, 'default')}
+                            {renderEventMenu(event)}
+                        </div>
+                    </div>
+
+                    {/* Tags Row */}
+                    <div className="flex flex-wrap items-center gap-2 mt-4">
+                        {startsIn && (
+                            <span className="px-3 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                {startsIn}
+                            </span>
+                        )}
+                        {event.event_type === 'online_zoom' ? (
+                            <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1.5">
+                                <Video className="w-3 h-3" />
+                                Canlı Oda
+                            </span>
+                        ) : (
+                            <span className="px-3 py-1 rounded-full text-xs font-medium bg-gray-50 text-gray-700 border border-gray-200 flex items-center gap-1.5">
+                                <MapPin className="w-3 h-3" />
+                                Yüz yüze
+                            </span>
+                        )}
+                        {attendeeCount > 0 && (
+                            <span className="px-3 py-1 rounded-full text-xs font-medium bg-violet-50 text-violet-700 border border-violet-200 flex items-center gap-1.5">
+                                <Users className="w-3 h-3" />
+                                {attendeeCount} katılımcı
+                            </span>
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    // Small Event Card Component (List Item)
+    const SmallEventCard = ({ event }: { event: Event }) => {
+        const attendeeCount = event.responses?.filter(r => r.status === 'attending').length || 0;
+
+        return (
+            <div
+                onClick={() => router.push(`/events/${event.id}`)}
+                className="bg-white p-4 rounded-xl border shadow-sm hover:shadow-md transition-all flex gap-4 group cursor-pointer"
+            >
+                {/* Thumbnail */}
+                <div className="w-32 h-20 rounded-lg overflow-hidden shrink-0">
+                    {event.cover_image_url ? (
+                        <img
+                            src={event.cover_image_url}
+                            alt={event.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                    ) : (
+                        <div
+                            className="w-full h-full"
+                            style={{
+                                background: `repeating-linear-gradient(
+                                    135deg,
+                                    #e2e8f0,
+                                    #e2e8f0 1px,
+                                    #f1f5f9 1px,
+                                    #f1f5f9 8px
+                                )`
+                            }}
+                        />
+                    )}
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-foreground group-hover:text-violet-600 transition-colors truncate">
+                            {event.title}
+                        </h3>
+                        {event.is_pinned && (
+                            <Pin className="h-3 w-3 fill-current text-blue-500 shrink-0" />
+                        )}
+                        {event.status === 'draft' && (
+                            <span className="px-2 py-0.5 rounded-md bg-yellow-100 text-yellow-700 text-xs font-bold border border-yellow-200 shrink-0">TASLAK</span>
+                        )}
+                    </div>
+                    <div className="text-sm text-muted-foreground mt-1 flex flex-wrap items-center gap-2">
+                        <span className="flex items-center gap-1">
+                            <Calendar className="w-3.5 h-3.5" />
+                            {format(new Date(event.start_time), "EEE, d MMM, HH:mm", { locale: tr })}
+                        </span>
+                        {event.event_type === 'online_zoom' ? (
+                            <span className="flex items-center gap-1 text-blue-600">
+                                <Video className="w-3.5 h-3.5" />
+                                Zoom
+                            </span>
+                        ) : event.location_address && (
+                            <span className="flex items-center gap-1">
+                                <MapPin className="w-3.5 h-3.5" />
+                                {event.location_address}
+                            </span>
+                        )}
+                    </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
+                    {renderActionButton(event)}
+                    {renderEventMenu(event)}
+                </div>
+            </div>
+        );
+    };
+
     return (
-        <div className="flex flex-col h-full bg-[#FAFAFA]">
-            <div className="flex-1 overflow-y-auto relative">
+        <div className="bg-[#FAFAFA] min-h-full">
+            <div className="relative">
 
                 {/* Cover Image */}
                 {settings.cover_image_url && (
@@ -199,9 +651,9 @@ export function EventFeed({ channel, user, initialEvents, members = [] }: EventF
                 </div>
 
                 {/* Content */}
-                <div className="max-w-5xl mx-auto w-full min-h-full p-8">
+                <div className="max-w-3xl mx-auto w-full min-h-full p-6 md:p-8">
                     {/* Filter Dropdown */}
-                    <div className="flex items-center gap-2 mb-8">
+                    <div className="flex items-center gap-2 mb-6">
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button variant="outline" className="rounded-full bg-white border-gray-200 text-foreground font-medium flex items-center gap-2 hover:bg-gray-50 h-10 px-5 shadow-sm">
@@ -248,357 +700,35 @@ export function EventFeed({ channel, user, initialEvents, members = [] }: EventF
                                 {filter === 'draft' ? 'Oluşturduğunuz taslaklar burada görünecek.' : 'Etkinlikler burada görünecek.'}
                             </p>
                         </div>
-                    ) : (
-                        <div className="grid gap-4">
-                            {events.map(event => (
-                                <div
-                                    key={event.id}
-                                    onClick={() => router.push(`/events/${event.id}`)}
-                                    className="bg-white p-5 rounded-xl border shadow-sm hover:shadow-md transition-all flex gap-5 group cursor-pointer"
-                                >
-                                    {/* Date Box */}
-                                    <div className="flex flex-col items-center justify-center w-16 h-16 rounded-lg bg-gray-50 border text-center shrink-0">
-                                        <span className="text-xs uppercase font-bold text-red-500">{format(new Date(event.start_time), 'MMM', { locale: tr })}</span>
-                                        <span className="text-xl font-bold text-gray-900">{format(new Date(event.start_time), 'd')}</span>
-                                    </div>
+                    ) : filter === 'upcoming' && nextEvent ? (
+                        <div className="space-y-8">
+                            {/* Next Event Section */}
+                            <div>
+                                <h2 className="text-lg font-bold text-foreground mb-4">Sıradaki Etkinlik</h2>
+                                <FeaturedEventCard event={nextEvent} />
+                            </div>
 
-                                    {/* Info */}
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <h3 className="text-lg font-bold text-foreground group-hover:text-blue-600 transition-colors truncate">{event.title}</h3>
-                                            {event.is_pinned && (
-                                                <Pin className="h-3 w-3 fill-current text-blue-500" />
-                                            )}
-                                            {event.status === 'draft' && (
-                                                <span className="px-2 py-0.5 rounded-md bg-yellow-100 text-yellow-700 text-xs font-bold border border-yellow-200">TASLAK</span>
-                                            )}
+                            {/* Remaining Events by Month */}
+                            {remainingEvents.length > 0 && (
+                                <div className="space-y-6">
+                                    {Array.from(groupedEvents.entries()).map(([monthLabel, monthEvents]) => (
+                                        <div key={monthLabel}>
+                                            <h2 className="text-lg font-bold text-foreground mb-4 capitalize">{monthLabel}</h2>
+                                            <div className="space-y-3">
+                                                {monthEvents.map(event => (
+                                                    <SmallEventCard key={event.id} event={event} />
+                                                ))}
+                                            </div>
                                         </div>
-                                        <div className="text-sm text-muted-foreground mt-1 flex flex-wrap items-center gap-3">
-                                            <span className="flex items-center gap-1.5">
-                                                <Calendar className="w-4 h-4" />
-                                                {format(new Date(event.start_time), 'EEE, HH:mm', { locale: tr })} - {format(new Date(event.end_time), 'HH:mm')}
-                                            </span>
-                                            {event.event_type === 'online_zoom' ? (
-                                                <span className="flex items-center gap-1.5 text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md text-xs font-medium">
-                                                    <Video className="w-3 h-3" />
-                                                    Zoom
-                                                </span>
-                                            ) : (
-                                                <span className="flex items-center gap-1.5">
-                                                    <MapPin className="w-4 h-4" />
-                                                    {event.location_address || 'Konum belirtilmedi'}
-                                                </span>
-                                            )}
-                                            {event.responses && event.responses.filter(r => r.status === 'attending').length > 0 && (
-                                                <span className="flex items-center gap-1.5 text-gray-500 bg-gray-50 px-2 py-0.5 rounded-md text-xs font-medium border border-gray-200">
-                                                    <Users className="w-3 h-3" />
-                                                    {event.responses.filter(r => r.status === 'attending').length} kişi katılıyor
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Action / Host */}
-                                    <div className="flex flex-col items-end justify-between">
-                                        <div className="flex items-center gap-2">
-                                            {/* RSVP / Ticket Logic */}
-                                            {event.status === 'published' && (
-                                                <>
-                                                    {event.ticket_price > 0 ? (
-                                                        // PAID EVENT
-                                                        event.tickets?.some(t => t.user_id === user.id) ? (
-                                                            // User has ticket → Show badge
-                                                            <div
-                                                                className="h-8 px-3 rounded-full text-sm font-medium bg-green-50 text-green-700 border border-green-200 flex items-center gap-1.5 shadow-sm"
-                                                                onClick={(e) => e.stopPropagation()}
-                                                            >
-                                                                <CheckCircle2 className="w-4 h-4 fill-green-600 text-white" />
-                                                                Biletli
-                                                            </div>
-                                                        ) : (
-                                                            // User has no ticket → Show buy button
-                                                            <Button
-                                                                variant="default"
-                                                                size="sm"
-                                                                className="h-8 px-4 rounded-full text-sm font-medium bg-[#1c1c1c] hover:bg-black text-white shadow-sm"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    router.push(`/events/${event.id}`);
-                                                                }}
-                                                            >
-                                                                Bilet Al - ₺{event.ticket_price}
-                                                            </Button>
-                                                        )
-                                                    ) : (
-                                                        // FREE EVENT → Show RSVP dropdown
-                                                        <DropdownMenu>
-                                                            <DropdownMenuTrigger asChild>
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="sm"
-                                                                    className={cn(
-                                                                        "h-8 px-3 rounded-full text-sm font-medium transition-colors border shadow-sm",
-                                                                        event.responses?.find(r => r.user_id === user.id)?.status === 'attending'
-                                                                            ? "bg-white text-green-700 hover:text-green-800 border-gray-200 hover:bg-gray-50"
-                                                                            : "bg-white text-gray-700 hover:text-gray-900 border-gray-200 hover:bg-gray-50"
-                                                                    )}
-                                                                    onClick={(e) => e.stopPropagation()}
-                                                                >
-                                                                    {(() => {
-                                                                        const userResponse = event.responses?.find(r => r.user_id === user.id);
-                                                                        if (userResponse?.status === 'attending') {
-                                                                            return (
-                                                                                <>
-                                                                                    <CheckCircle2 className="w-4 h-4 mr-1.5 fill-green-600 text-white" />
-                                                                                    Katılıyorum
-                                                                                </>
-                                                                            );
-                                                                        } else if (userResponse?.status === 'not_attending') {
-                                                                            return (
-                                                                                <>
-                                                                                    <XCircle className="w-4 h-4 mr-1.5 text-gray-600" />
-                                                                                    Katılmıyorum
-                                                                                </>
-                                                                            );
-                                                                        } else {
-                                                                            return (
-                                                                                <>
-                                                                                    Durumunu seç
-                                                                                    <ChevronDown className="w-3 h-3 ml-1.5 opacity-50" />
-                                                                                </>
-                                                                            );
-                                                                        }
-                                                                    })()}
-                                                                </Button>
-                                                            </DropdownMenuTrigger>
-                                                            <DropdownMenuContent align="end" className="w-40 rounded-xl shadow-lg border-gray-200 p-1">
-                                                                <DropdownMenuItem
-                                                                    onClick={async (e) => {
-                                                                        e.stopPropagation();
-
-                                                                        // Optimistic update
-                                                                        const updatedEvents = events.map(ev => {
-                                                                            if (ev.id === event.id) {
-                                                                                const existingResponse = ev.responses?.find(r => r.user_id === user.id);
-                                                                                if (existingResponse) {
-                                                                                    return {
-                                                                                        ...ev,
-                                                                                        responses: ev.responses?.map(r =>
-                                                                                            r.user_id === user.id ? { ...r, status: 'attending' as const } : r
-                                                                                        )
-                                                                                    };
-                                                                                } else {
-                                                                                    return {
-                                                                                        ...ev,
-                                                                                        responses: [...(ev.responses || []), {
-                                                                                            user_id: user.id,
-                                                                                            status: 'attending' as const,
-                                                                                            user: {
-                                                                                                id: user.id,
-                                                                                                full_name: user.full_name || 'Kullanıcı',
-                                                                                                avatar_url: user.avatar_url || null
-                                                                                            }
-                                                                                        }]
-                                                                                    };
-                                                                                }
-                                                                            }
-                                                                            return ev;
-                                                                        });
-                                                                        setEvents(updatedEvents);
-
-                                                                        try {
-                                                                            await setEventResponse(event.id, 'attending');
-                                                                            setSuccessEvent(event);
-                                                                            setShowSuccessModal(true);
-                                                                        } catch (error: any) {
-                                                                            // Revert on error
-                                                                            await refreshEvents();
-                                                                            toast.error(error.message || "Bir hata oluştu");
-                                                                        }
-                                                                    }}
-                                                                    className="cursor-pointer flex items-center justify-between"
-                                                                >
-                                                                    <div className="flex items-center">
-                                                                        <CheckCircle2 className={cn(
-                                                                            "w-4 h-4 mr-2",
-                                                                            event.responses?.find(r => r.user_id === user.id)?.status === 'attending'
-                                                                                ? "text-green-600"
-                                                                                : "text-gray-400"
-                                                                        )} />
-                                                                        <span>Katılıyorum</span>
-                                                                    </div>
-                                                                    {event.responses?.find(r => r.user_id === user.id)?.status === 'attending' && (
-                                                                        <div className="w-2 h-2 rounded-full bg-green-600" />
-                                                                    )}
-                                                                </DropdownMenuItem>
-                                                                <DropdownMenuItem
-                                                                    onClick={async (e) => {
-                                                                        e.stopPropagation();
-
-                                                                        // Optimistic update
-                                                                        const updatedEvents = events.map(ev => {
-                                                                            if (ev.id === event.id) {
-                                                                                const existingResponse = ev.responses?.find(r => r.user_id === user.id);
-                                                                                if (existingResponse) {
-                                                                                    return {
-                                                                                        ...ev,
-                                                                                        responses: ev.responses?.map(r =>
-                                                                                            r.user_id === user.id ? { ...r, status: 'not_attending' as const } : r
-                                                                                        )
-                                                                                    };
-                                                                                } else {
-                                                                                    return {
-                                                                                        ...ev,
-                                                                                        responses: [...(ev.responses || []), {
-                                                                                            user_id: user.id,
-                                                                                            status: 'not_attending' as const,
-                                                                                            user: {
-                                                                                                id: user.id,
-                                                                                                full_name: user.full_name || 'Kullanıcı',
-                                                                                                avatar_url: user.avatar_url || null
-                                                                                            }
-                                                                                        }]
-                                                                                    };
-                                                                                }
-                                                                            }
-                                                                            return ev;
-                                                                        });
-                                                                        setEvents(updatedEvents);
-
-                                                                        try {
-                                                                            await setEventResponse(event.id, 'not_attending');
-                                                                            toast.success("Katılım iptal edildi");
-                                                                        } catch (error: any) {
-                                                                            // Revert on error
-                                                                            await refreshEvents();
-                                                                            toast.error(error.message || "Bir hata oluştu");
-                                                                        }
-                                                                    }}
-                                                                    className="cursor-pointer flex items-center justify-between"
-                                                                >
-                                                                    <div className="flex items-center">
-                                                                        <XCircle className={cn(
-                                                                            "w-4 h-4 mr-2",
-                                                                            event.responses?.find(r => r.user_id === user.id)?.status === 'not_attending'
-                                                                                ? "text-gray-600"
-                                                                                : "text-gray-400"
-                                                                        )} />
-                                                                        <span>Katılmıyorum</span>
-                                                                    </div>
-                                                                    {event.responses?.find(r => r.user_id === user.id)?.status === 'not_attending' && (
-                                                                        <div className="w-2 h-2 rounded-full bg-gray-600" />
-                                                                    )}
-                                                                </DropdownMenuItem>
-                                                            </DropdownMenuContent>
-                                                        </DropdownMenu>
-                                                    )}
-                                                </>
-                                            )}
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                                                        onClick={(e) => e.stopPropagation()}
-                                                    >
-                                                        <MoreHorizontal className="h-4 w-4" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end" className="w-56 rounded-xl shadow-lg">
-                                                    <DropdownMenuItem
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleAction(() => toggleEventBookmark(event.id), "Etkinlik kaydedildi");
-                                                        }}
-                                                        className="cursor-pointer"
-                                                    >
-                                                        <Bookmark className={cn("h-4 w-4 mr-2", event.bookmarks?.some(b => b.user_id === user.id) && "fill-current text-blue-600")} />
-                                                        <span>{event.bookmarks?.some(b => b.user_id === user.id) ? "Kaydedilenlerden çıkar" : "Etkinliği kaydet"}</span>
-                                                    </DropdownMenuItem>
-
-                                                    {isInstructor && (
-                                                        <>
-                                                            <DropdownMenuItem
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setEditEventId(event.id);
-                                                                }}
-                                                                className="cursor-pointer"
-                                                            >
-                                                                <Edit2 className="h-4 w-4 mr-2" />
-                                                                <span>Etkinliği düzenle</span>
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleAction(() => duplicateEvent(event.id), "Etkinlik çoğaltıldı");
-                                                                }}
-                                                                className="cursor-pointer"
-                                                            >
-                                                                <Copy className="h-4 w-4 mr-2" />
-                                                                <span>Etkinliği çoğalt</span>
-                                                            </DropdownMenuItem>
-
-                                                            {event.status === 'draft' ? (
-                                                                <DropdownMenuItem
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleAction(() => publishEvent(event.id), "Etkinlik yayınlandı");
-                                                                    }}
-                                                                    className="cursor-pointer text-green-600 focus:text-green-700"
-                                                                >
-                                                                    <Eye className="h-4 w-4 mr-2" />
-                                                                    <span>Etkinliği yayınla</span>
-                                                                </DropdownMenuItem>
-                                                            ) : (
-                                                                <DropdownMenuItem
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleAction(() => unpublishEvent(event.id), "Etkinlik taslağa çekildi");
-                                                                    }}
-                                                                    className="cursor-pointer text-orange-600 focus:text-orange-700"
-                                                                >
-                                                                    <EyeOff className="h-4 w-4 mr-2" />
-                                                                    <span>Taslağa geri çek</span>
-                                                                </DropdownMenuItem>
-                                                            )}
-
-                                                            <DropdownMenuSeparator />
-
-                                                            <div className="flex items-center justify-between px-2 py-1.5" onClick={e => e.stopPropagation()}>
-                                                                <div className="flex items-center">
-                                                                    <Pin className={cn("h-4 w-4 mr-2", event.is_pinned && "fill-current text-blue-600")} />
-                                                                    <span className="text-sm">Sabitle</span>
-                                                                </div>
-                                                                <Switch
-                                                                    checked={event.is_pinned}
-                                                                    onCheckedChange={(checked) => {
-                                                                        handleAction(() => toggleEventPin(event.id, checked), checked ? "Etkinlik sabitlendi" : "Sabitleme kaldırıldı");
-                                                                    }}
-                                                                    className="scale-75"
-                                                                />
-                                                            </div>
-
-                                                            <DropdownMenuSeparator />
-
-                                                            <DropdownMenuItem
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setDeleteEventId(event.id);
-                                                                }}
-                                                                className="cursor-pointer text-red-600 focus:text-red-700 focus:bg-red-50"
-                                                            >
-                                                                <Trash2 className="h-4 w-4 mr-2" />
-                                                                <span>Etkinliği sil</span>
-                                                            </DropdownMenuItem>
-                                                        </>
-                                                    )}
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        </div>
-                                    </div>
+                                    ))}
                                 </div>
+                            )}
+                        </div>
+                    ) : (
+                        // Past or Draft events - simple list
+                        <div className="space-y-3">
+                            {events.map(event => (
+                                <SmallEventCard key={event.id} event={event} />
                             ))}
                         </div>
                     )}
@@ -655,4 +785,3 @@ export function EventFeed({ channel, user, initialEvents, members = [] }: EventF
         </div>
     );
 }
-
