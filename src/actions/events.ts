@@ -82,6 +82,13 @@ export async function updateEvent(eventId: string, data: Partial<{
     recurrence: string;
     channelId: string;
     attachments: any[];
+    settings: {
+        reminders?: { in_app_enabled?: boolean; email_enabled?: boolean };
+        notifications?: { send_post_notification?: boolean; send_confirmation_email?: boolean };
+        permissions?: { comments_disabled?: boolean; hide_attendees?: boolean };
+        attendees?: { rsvp_limit?: number | null; allow_guests?: boolean };
+        seo?: { meta_title?: string | null; meta_description?: string | null; og_image_url?: string | null };
+    };
 }>) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -142,6 +149,63 @@ export async function publishEvent(eventId: string) {
     if (error) {
         throw new Error(`Failed to publish event: ${error.message}`);
     }
+
+    // Send Notification Email if enabled
+    try {
+        const { data: event } = await supabase
+            .from('events')
+            .select('*, community:communities(name)')
+            .eq('id', eventId)
+            .single();
+
+        if (event) {
+            const settings = event.settings as any;
+            const sendNotification = settings?.notifications?.send_post_notification !== false;
+
+            if (sendNotification) {
+                // Fetch channel members (or community members if no channel specific logic yet)
+                // For MVP: Fetch all community members who have email
+                const { data: members } = await supabase
+                    .from('memberships')
+                    .select('user:profiles(email, full_name)')
+                    .eq('community_id', event.community_id)
+                    .eq('status', 'active');
+
+                if (members && members.length > 0) {
+                    const recipients = members
+                        .map((m: any) => ({ email: m.user?.email, name: m.user?.full_name }))
+                        .filter((r: any) => r.email); // Filter out nulls
+
+                    if (recipients.length > 0) {
+                        const { sendBulkEmails } = await import('@/lib/email');
+                        const { generateEventAnnouncementEmail } = await import('@/emails/event-announcement');
+                        const { format } = await import('date-fns');
+                        const { tr } = await import('date-fns/locale');
+
+                        await sendBulkEmails(
+                            recipients,
+                            `📢 Yeni Etkinlik: ${event.title}`,
+                            (userName) => generateEventAnnouncementEmail({
+                                eventName: event.title,
+                                eventDescription: event.description || '',
+                                eventDate: format(new Date(event.start_time), 'd MMMM yyyy', { locale: tr }),
+                                eventTime: format(new Date(event.start_time), 'HH:mm', { locale: tr }),
+                                eventLocation: event.event_type === 'online_zoom' ? 'Online (Zoom)' : event.location_address || 'Belirlenmedi',
+                                eventUrl: `${process.env.NEXT_PUBLIC_APP_URL}/events/${event.id}`,
+                                communityName: event.community?.name || 'Topluluk',
+                                coverImageUrl: event.cover_image_url || undefined,
+                                userName
+                            })
+                        );
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.error("Failed to send publish notifications:", e);
+        // Do not fail the publish action
+    }
+
     revalidatePath(`/community`);
 }
 
@@ -162,7 +226,7 @@ export async function getEvent(eventId: string) {
     const supabase = await createClient();
     const { data, error } = await supabase
         .from('events')
-        .select('*')
+        .select('*, community:communities(*), responses:event_responses(user_id, status, user:profiles(id, full_name, avatar_url))')
         .eq('id', eventId)
         .single();
 
@@ -179,7 +243,7 @@ export async function getEvents(channelId: string, filter: 'upcoming' | 'past' |
 
     let query = supabase
         .from('events')
-        .select('*, bookmarks(user_id)')
+        .select('*, bookmarks(user_id), responses:event_responses(user_id, status, user:profiles(id, full_name, avatar_url))')
         .eq('channel_id', channelId);
 
     if (filter === 'draft') {
@@ -294,7 +358,7 @@ export async function addEventAttendee(eventId: string, userId: string) {
         .insert({
             event_id: eventId,
             user_id: userId,
-            qr_code_token: Math.random().toString(36).substring(7),
+            qr_code_token: crypto.randomUUID(),
             checked_in: false,
             // For manual addition
             iyzico_payment_id: null
@@ -305,6 +369,159 @@ export async function addEventAttendee(eventId: string, userId: string) {
         throw new Error(`Ekleme başarısız: ${error.message}`);
     }
 
+    revalidatePath(`/events/${eventId}`);
+}
+
+export async function removeEventAttendee(eventId: string) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) throw new Error("Giriş yapmalısınız.");
+
+    const { error } = await supabase
+        .from('tickets')
+        .delete()
+        .eq('event_id', eventId)
+        .eq('user_id', user.id);
+
+    if (error) {
+        throw new Error(`Kayıt iptali başarısız: ${error.message}`);
+    }
+
+    revalidatePath(`/community`);
+    revalidatePath(`/events/${eventId}`);
+}
+
+export async function setEventResponse(eventId: string, status: 'attending' | 'not_attending') {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) throw new Error("Giriş yapmalısınız.");
+
+    // Fetch event details first for validation and email
+    const { data: event, error: eventError } = await supabase
+        .from('events')
+        .select('*, community:communities(name)')
+        .eq('id', eventId)
+        .single();
+
+    if (eventError || !event) {
+        throw new Error("Etkinlik bulunamadı.");
+    }
+
+    // Check RSVP limit if attending
+    if (status === 'attending') {
+        const settings = event.settings as any;
+        const rsvpLimit = settings?.attendees?.rsvp_limit;
+
+        if (rsvpLimit) {
+            // Check if user is already attending (to allow them to stay attending or update details without being blocked by limit)
+            const { data: existingResponse } = await supabase
+                .from('event_responses')
+                .select('status')
+                .eq('event_id', eventId)
+                .eq('user_id', user.id)
+                .single();
+
+            const isAlreadyAttending = existingResponse?.status === 'attending';
+
+            if (!isAlreadyAttending) {
+                // Count current attending users
+                const { count, error: countError } = await supabase
+                    .from('event_responses')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('event_id', eventId)
+                    .eq('status', 'attending');
+
+                if (countError) {
+                    console.error("Error counting attendees:", countError);
+                    throw new Error("Kontenjan kontrolü yapılamadı.");
+                }
+
+                if (count !== null && count >= rsvpLimit) {
+                    throw new Error("Etkinlik kontenjanı dolu.");
+                }
+            }
+        }
+    }
+
+    const { error } = await supabase
+        .from('event_responses')
+        .upsert({
+            event_id: eventId,
+            user_id: user.id,
+            status: status
+        }, {
+            onConflict: 'event_id,user_id'
+        });
+
+    if (error) {
+        throw new Error(`RSVP kaydı başarısız: ${error.message}`);
+    }
+
+    // Send confirmation email when attending
+    const settings = event.settings as any;
+    const sendConfirmation = settings?.notifications?.send_confirmation_email !== false; // Default to true if missing
+
+    if (status === 'attending' && sendConfirmation) {
+        try {
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('full_name')
+                .eq('id', user.id)
+                .single();
+
+            // Use auth user's email since profiles table may not have email
+            const userEmail = user.email;
+
+            if (userEmail) {
+                const { sendEmail } = await import('@/lib/email');
+                const { generateEventConfirmationEmail } = await import('@/emails/event-confirmation');
+
+                const emailHtml = generateEventConfirmationEmail({
+                    userName: profile?.full_name || 'Kullanıcı',
+                    eventTitle: event.title,
+                    eventDate: new Date(event.start_time),
+                    eventEndDate: new Date(event.end_time),
+                    eventType: event.event_type,
+                    location: event.location_address,
+                    zoomLink: event.zoom_meeting_id ? `https://zoom.us/j/${event.zoom_meeting_id}` : undefined,
+                    communityName: event.community?.name || 'WellDo',
+                });
+
+                await sendEmail({
+                    to: userEmail,
+                    subject: `✅ Kayıt Onayı: ${event.title}`,
+                    html: emailHtml,
+                });
+            }
+        } catch (emailError) {
+            // Don't fail the RSVP if email fails, just log it
+            console.error('Failed to send confirmation email:', emailError);
+        }
+    }
+
+    revalidatePath(`/community`);
+    revalidatePath(`/events/${eventId}`);
+}
+
+export async function removeEventResponse(eventId: string) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) throw new Error("Giriş yapmalısınız.");
+
+    const { error } = await supabase
+        .from('event_responses')
+        .delete()
+        .eq('event_id', eventId)
+        .eq('user_id', user.id);
+
+    if (error) {
+        throw new Error(`RSVP silme başarısız: ${error.message}`);
+    }
+
+    revalidatePath(`/community`);
     revalidatePath(`/events/${eventId}`);
 }
 
@@ -402,4 +619,68 @@ export async function toggleEventBookmark(eventId: string) {
     }
 
     revalidatePath(`/community`);
+}
+
+// EMail Schedule
+export async function createEmailSchedule(data: {
+    eventId: string;
+    subject: string;
+    content: string;
+    scheduledAt: Date;
+    audience?: 'going' | 'invited' | 'all';
+}) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+        throw new Error("Unauthorized");
+    }
+
+    const { error, data: schedule } = await supabase
+        .from('event_email_schedules')
+        .insert({
+            event_id: data.eventId,
+            subject: data.subject,
+            content: data.content,
+            scheduled_at: data.scheduledAt.toISOString(),
+            audience: data.audience || 'going',
+            status: 'pending'
+        })
+        .select()
+        .single();
+
+    if (error) {
+        console.error("Error creating email schedule:", error);
+        throw new Error(`Failed to create email schedule: ${error.message}`);
+    }
+
+    return schedule;
+}
+
+export async function getEmailSchedules(eventId: string) {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from('event_email_schedules')
+        .select('*')
+        .eq('event_id', eventId)
+        .order('scheduled_at', { ascending: true });
+
+    if (error) {
+        console.error("Error fetching email schedules:", error);
+        return [];
+    }
+
+    return data;
+}
+
+export async function deleteEmailSchedule(scheduleId: string) {
+    const supabase = await createClient();
+    const { error } = await supabase
+        .from('event_email_schedules')
+        .delete()
+        .eq('id', scheduleId);
+
+    if (error) {
+        throw new Error(`Failed to delete email schedule: ${error.message}`);
+    }
 }

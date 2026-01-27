@@ -92,7 +92,7 @@ export function PostCard({ post, currentUserId, onClick }: PostCardProps) {
         e.stopPropagation();
         startTransition(async () => {
             addOptimisticState(!optimisticState.hasLiked);
-            await toggleLike(post.id);
+            await toggleLike(post.id, 'post');
         });
     };
 

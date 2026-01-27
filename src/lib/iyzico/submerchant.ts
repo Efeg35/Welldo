@@ -1,4 +1,5 @@
 import { iyzipay, SubMerchantData } from "./client";
+export type { SubMerchantData };
 import { v4 as uuidv4 } from "uuid";
 
 /**

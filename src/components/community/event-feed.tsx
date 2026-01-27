@@ -31,7 +31,9 @@ import {
     toggleEventBookmark,
     publishEvent,
     unpublishEvent,
-    getEvents
+    getEvents,
+    setEventResponse,
+    removeEventResponse
 } from "@/actions/events";
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
@@ -42,12 +44,18 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+    CheckCircle2,
+    Circle,
+    XCircle
+} from "lucide-react";
 import { DeleteSpaceDialog } from "./delete-space-dialog";
 import { DeleteEventDialog } from "./delete-event-dialog";
 import { ChannelSettingsOverlay } from "@/components/community/channel-settings-overlay";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
+import { RegistrationSuccessModal } from "./registration-success-modal";
 
 import { Channel, Profile, Event } from "@/types";
 
@@ -71,6 +79,11 @@ export function EventFeed({ channel, user, initialEvents, members = [] }: EventF
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [deleteEventId, setDeleteEventId] = useState<string | null>(null);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+    // Success Modal State
+    const [showSuccessModal, setShowSuccessModal] = useState(false);
+    const [successEvent, setSuccessEvent] = useState<Event | null>(null);
+
     const isInstructor = user?.role === 'instructor' || user?.role === 'admin';
 
     // Settings
@@ -276,12 +289,211 @@ export function EventFeed({ channel, user, initialEvents, members = [] }: EventF
                                                     {event.location_address || 'Konum belirtilmedi'}
                                                 </span>
                                             )}
+                                            {event.responses && event.responses.filter(r => r.status === 'attending').length > 0 && (
+                                                <span className="flex items-center gap-1.5 text-gray-500 bg-gray-50 px-2 py-0.5 rounded-md text-xs font-medium border border-gray-200">
+                                                    <Users className="w-3 h-3" />
+                                                    {event.responses.filter(r => r.status === 'attending').length} kişi katılıyor
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
 
                                     {/* Action / Host */}
                                     <div className="flex flex-col items-end justify-between">
                                         <div className="flex items-center gap-2">
+                                            {/* RSVP / Ticket Logic */}
+                                            {event.status === 'published' && (
+                                                <>
+                                                    {event.ticket_price > 0 ? (
+                                                        // PAID EVENT
+                                                        event.tickets?.some(t => t.user_id === user.id) ? (
+                                                            // User has ticket → Show badge
+                                                            <div
+                                                                className="h-8 px-3 rounded-full text-sm font-medium bg-green-50 text-green-700 border border-green-200 flex items-center gap-1.5 shadow-sm"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            >
+                                                                <CheckCircle2 className="w-4 h-4 fill-green-600 text-white" />
+                                                                Biletli
+                                                            </div>
+                                                        ) : (
+                                                            // User has no ticket → Show buy button
+                                                            <Button
+                                                                variant="default"
+                                                                size="sm"
+                                                                className="h-8 px-4 rounded-full text-sm font-medium bg-[#1c1c1c] hover:bg-black text-white shadow-sm"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    router.push(`/events/${event.id}`);
+                                                                }}
+                                                            >
+                                                                Bilet Al - ₺{event.ticket_price}
+                                                            </Button>
+                                                        )
+                                                    ) : (
+                                                        // FREE EVENT → Show RSVP dropdown
+                                                        <DropdownMenu>
+                                                            <DropdownMenuTrigger asChild>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className={cn(
+                                                                        "h-8 px-3 rounded-full text-sm font-medium transition-colors border shadow-sm",
+                                                                        event.responses?.find(r => r.user_id === user.id)?.status === 'attending'
+                                                                            ? "bg-white text-green-700 hover:text-green-800 border-gray-200 hover:bg-gray-50"
+                                                                            : "bg-white text-gray-700 hover:text-gray-900 border-gray-200 hover:bg-gray-50"
+                                                                    )}
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                >
+                                                                    {(() => {
+                                                                        const userResponse = event.responses?.find(r => r.user_id === user.id);
+                                                                        if (userResponse?.status === 'attending') {
+                                                                            return (
+                                                                                <>
+                                                                                    <CheckCircle2 className="w-4 h-4 mr-1.5 fill-green-600 text-white" />
+                                                                                    Katılıyorum
+                                                                                </>
+                                                                            );
+                                                                        } else if (userResponse?.status === 'not_attending') {
+                                                                            return (
+                                                                                <>
+                                                                                    <XCircle className="w-4 h-4 mr-1.5 text-gray-600" />
+                                                                                    Katılmıyorum
+                                                                                </>
+                                                                            );
+                                                                        } else {
+                                                                            return (
+                                                                                <>
+                                                                                    Durumunu seç
+                                                                                    <ChevronDown className="w-3 h-3 ml-1.5 opacity-50" />
+                                                                                </>
+                                                                            );
+                                                                        }
+                                                                    })()}
+                                                                </Button>
+                                                            </DropdownMenuTrigger>
+                                                            <DropdownMenuContent align="end" className="w-40 rounded-xl shadow-lg border-gray-200 p-1">
+                                                                <DropdownMenuItem
+                                                                    onClick={async (e) => {
+                                                                        e.stopPropagation();
+
+                                                                        // Optimistic update
+                                                                        const updatedEvents = events.map(ev => {
+                                                                            if (ev.id === event.id) {
+                                                                                const existingResponse = ev.responses?.find(r => r.user_id === user.id);
+                                                                                if (existingResponse) {
+                                                                                    return {
+                                                                                        ...ev,
+                                                                                        responses: ev.responses?.map(r =>
+                                                                                            r.user_id === user.id ? { ...r, status: 'attending' as const } : r
+                                                                                        )
+                                                                                    };
+                                                                                } else {
+                                                                                    return {
+                                                                                        ...ev,
+                                                                                        responses: [...(ev.responses || []), {
+                                                                                            user_id: user.id,
+                                                                                            status: 'attending' as const,
+                                                                                            user: {
+                                                                                                id: user.id,
+                                                                                                full_name: user.full_name || 'Kullanıcı',
+                                                                                                avatar_url: user.avatar_url || null
+                                                                                            }
+                                                                                        }]
+                                                                                    };
+                                                                                }
+                                                                            }
+                                                                            return ev;
+                                                                        });
+                                                                        setEvents(updatedEvents);
+
+                                                                        try {
+                                                                            await setEventResponse(event.id, 'attending');
+                                                                            setSuccessEvent(event);
+                                                                            setShowSuccessModal(true);
+                                                                        } catch (error: any) {
+                                                                            // Revert on error
+                                                                            await refreshEvents();
+                                                                            toast.error(error.message || "Bir hata oluştu");
+                                                                        }
+                                                                    }}
+                                                                    className="cursor-pointer flex items-center justify-between"
+                                                                >
+                                                                    <div className="flex items-center">
+                                                                        <CheckCircle2 className={cn(
+                                                                            "w-4 h-4 mr-2",
+                                                                            event.responses?.find(r => r.user_id === user.id)?.status === 'attending'
+                                                                                ? "text-green-600"
+                                                                                : "text-gray-400"
+                                                                        )} />
+                                                                        <span>Katılıyorum</span>
+                                                                    </div>
+                                                                    {event.responses?.find(r => r.user_id === user.id)?.status === 'attending' && (
+                                                                        <div className="w-2 h-2 rounded-full bg-green-600" />
+                                                                    )}
+                                                                </DropdownMenuItem>
+                                                                <DropdownMenuItem
+                                                                    onClick={async (e) => {
+                                                                        e.stopPropagation();
+
+                                                                        // Optimistic update
+                                                                        const updatedEvents = events.map(ev => {
+                                                                            if (ev.id === event.id) {
+                                                                                const existingResponse = ev.responses?.find(r => r.user_id === user.id);
+                                                                                if (existingResponse) {
+                                                                                    return {
+                                                                                        ...ev,
+                                                                                        responses: ev.responses?.map(r =>
+                                                                                            r.user_id === user.id ? { ...r, status: 'not_attending' as const } : r
+                                                                                        )
+                                                                                    };
+                                                                                } else {
+                                                                                    return {
+                                                                                        ...ev,
+                                                                                        responses: [...(ev.responses || []), {
+                                                                                            user_id: user.id,
+                                                                                            status: 'not_attending' as const,
+                                                                                            user: {
+                                                                                                id: user.id,
+                                                                                                full_name: user.full_name || 'Kullanıcı',
+                                                                                                avatar_url: user.avatar_url || null
+                                                                                            }
+                                                                                        }]
+                                                                                    };
+                                                                                }
+                                                                            }
+                                                                            return ev;
+                                                                        });
+                                                                        setEvents(updatedEvents);
+
+                                                                        try {
+                                                                            await setEventResponse(event.id, 'not_attending');
+                                                                            toast.success("Katılım iptal edildi");
+                                                                        } catch (error: any) {
+                                                                            // Revert on error
+                                                                            await refreshEvents();
+                                                                            toast.error(error.message || "Bir hata oluştu");
+                                                                        }
+                                                                    }}
+                                                                    className="cursor-pointer flex items-center justify-between"
+                                                                >
+                                                                    <div className="flex items-center">
+                                                                        <XCircle className={cn(
+                                                                            "w-4 h-4 mr-2",
+                                                                            event.responses?.find(r => r.user_id === user.id)?.status === 'not_attending'
+                                                                                ? "text-gray-600"
+                                                                                : "text-gray-400"
+                                                                        )} />
+                                                                        <span>Katılmıyorum</span>
+                                                                    </div>
+                                                                    {event.responses?.find(r => r.user_id === user.id)?.status === 'not_attending' && (
+                                                                        <div className="w-2 h-2 rounded-full bg-gray-600" />
+                                                                    )}
+                                                                </DropdownMenuItem>
+                                                            </DropdownMenuContent>
+                                                        </DropdownMenu>
+                                                    )}
+                                                </>
+                                            )}
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
                                                     <Button
@@ -434,6 +646,12 @@ export function EventFeed({ channel, user, initialEvents, members = [] }: EventF
                     onClose={() => setIsSettingsOpen(false)}
                 />
             )}
+
+            <RegistrationSuccessModal
+                isOpen={showSuccessModal}
+                onClose={() => setShowSuccessModal(false)}
+                event={successEvent}
+            />
         </div>
     );
 }

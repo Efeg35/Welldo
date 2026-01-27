@@ -237,7 +237,7 @@ function LessonEditor({ lesson }: { lesson: CourseLesson }) {
                     <Textarea
                         className="min-h-[200px]"
                         placeholder="Ders içeriğini buraya yazın..."
-                        value={content}
+                        value={typeof content === 'string' ? content : JSON.stringify(content, null, 2)}
                         onChange={(e) => setContent(e.target.value)}
                     />
                 </div>

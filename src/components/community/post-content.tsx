@@ -42,7 +42,7 @@ export function PostContent({ post: initialPost, user }: PostContentProps) {
     const handleLike = () => {
         startTransition(async () => {
             addOptimisticLike(!optimisticLike.hasLiked);
-            await toggleLike(post.id);
+            await toggleLike(post.id, 'post');
         });
     };
 

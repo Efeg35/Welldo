@@ -7,20 +7,26 @@ import { useState, useTransition } from "react";
 import { Send } from "lucide-react";
 
 interface CreateCommentProps {
-    postId: string;
+    postId?: string;
+    eventId?: string;
     user: any;
 }
 
-export function CreateComment({ postId, user }: CreateCommentProps) {
+export function CreateComment({ postId, eventId, user }: CreateCommentProps) {
     const [content, setContent] = useState("");
     const [isPending, startTransition] = useTransition();
+
+    const resourceId = postId || eventId;
+    const type = postId ? 'post' : 'event';
+
+    if (!resourceId) return null;
 
     const handleSubmit = async () => {
         if (!content.trim()) return;
 
         startTransition(async () => {
             try {
-                await createComment(postId, content);
+                await createComment(resourceId, content, type);
                 setContent("");
             } catch (error) {
                 console.error("Failed to create comment", error);

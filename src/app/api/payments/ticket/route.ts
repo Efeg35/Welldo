@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createCheckoutForm, calculatePaymentSplit } from "@/lib/iyzico";
 import { headers } from "next/headers";
+import { revalidatePath } from "next/cache";
 
 export async function POST(request: NextRequest) {
     try {
@@ -46,15 +47,28 @@ export async function POST(request: NextRequest) {
             .single();
 
         if (existingTicket) {
-            return NextResponse.json(
-                { error: "Already have a ticket" },
-                { status: 400 }
-            );
+            // Self-heal: If user has a ticket but no response (due to previous bug), fix it now.
+            const { error: healError } = await supabase
+                .from("event_responses")
+                .upsert({
+                    event_id: eventId,
+                    user_id: user.id,
+                    status: 'attending'
+                });
+
+            if (healError) {
+                console.error("Failed to heal event response:", healError);
+            }
+
+            revalidatePath(`/events/${eventId}`);
+            // Return success instead of error so consumer refreshes and sees "Going"
+            return NextResponse.json({ success: true, ticket: existingTicket, restored: true });
         }
 
         // Free event - create ticket directly
         if (event.ticket_price === 0) {
-            const { data: ticket, error } = await supabase
+            // ... (existing code)
+            const { data: ticket, error: ticketError } = await supabase
                 .from("tickets")
                 .insert({
                     event_id: eventId,
@@ -63,10 +77,24 @@ export async function POST(request: NextRequest) {
                 .select()
                 .single();
 
-            if (error) {
-                return NextResponse.json({ error: error.message }, { status: 500 });
+            if (ticketError) {
+                return NextResponse.json({ error: ticketError.message }, { status: 500 });
             }
 
+            // ... (existing code for response)
+            const { error: responseError } = await supabase
+                .from("event_responses")
+                .upsert({
+                    event_id: eventId,
+                    user_id: user.id,
+                    status: 'attending'
+                });
+
+            if (responseError) {
+                console.error("Failed to create event response for free ticket:", responseError);
+            }
+
+            revalidatePath(`/events/${eventId}`);
             return NextResponse.json({ success: true, ticket, free: true });
         }
 

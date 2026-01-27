@@ -118,6 +118,31 @@ export interface Event {
     ticket_count?: number;
     bookmarks?: { user_id: string }[];
     bookmarked?: boolean;
+    tickets?: { user_id: string }[];
+    responses?: {
+        user_id: string;
+        status: 'attending' | 'not_attending';
+        user: { id: string; full_name: string | null; avatar_url: string | null }
+    }[];
+    settings?: {
+        reminders?: { in_app_enabled?: boolean; email_enabled?: boolean };
+        notifications?: { send_post_notification?: boolean; send_confirmation_email?: boolean };
+        permissions?: { comments_disabled?: boolean; hide_attendees?: boolean };
+        attendees?: { rsvp_limit?: number | null; allow_guests?: boolean };
+        seo?: { meta_title?: string | null; meta_description?: string | null; og_image_url?: string | null };
+    };
+}
+
+export interface EventEmailSchedule {
+    id: string;
+    event_id: string;
+    subject: string;
+    content: string;
+    scheduled_at: string;
+    audience: 'going' | 'invited' | 'all';
+    status: 'pending' | 'sent' | 'failed';
+    created_at: string;
+    updated_at: string;
 }
 
 export interface Post {
@@ -151,6 +176,18 @@ export interface Ticket {
     checked_in_at: string | null;
     iyzico_payment_id: string | null;
     created_at: string;
+    // Joined fields
+    event?: Event;
+    user?: Profile;
+}
+
+export interface EventResponse {
+    id: string;
+    event_id: string;
+    user_id: string;
+    status: 'attending' | 'not_attending';
+    created_at: string;
+    updated_at: string;
     // Joined fields
     event?: Event;
     user?: Profile;

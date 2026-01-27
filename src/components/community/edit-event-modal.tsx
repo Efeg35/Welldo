@@ -4,14 +4,22 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useState, useTransition, useEffect } from "react";
-import { updateEvent, publishEvent, unpublishEvent, getEvent, getEventStats, getEventAttendees, addEventAttendee } from "@/actions/events";
+import { updateEvent, publishEvent, unpublishEvent, getEvent, getEventStats, getEventAttendees, addEventAttendee, createEmailSchedule, getEmailSchedules, deleteEmailSchedule } from "@/actions/events";
 import { getCommunityChannels, searchUsers } from "@/actions/community";
 import { toast } from "sonner";
-import { Loader2, X, MoreHorizontal, Calendar as CalendarIcon, Clock, HelpCircle, Settings, ArrowUpRight, Copy, Eye, Users, User, Download, UserPlus, Search, Plus, Image as ImageIcon, Paperclip, FileText, Video, Trash2 } from "lucide-react";
+import { EmailReminderDialog } from "./email-reminder-dialog";
+import {
+    Loader2, X, MoreHorizontal, Calendar as CalendarIcon, Clock, HelpCircle,
+    Settings, ArrowUpRight, Copy, Eye, Users, User, Download, UserPlus, Search,
+    Plus, Image as ImageIcon, Paperclip, FileText, Video, Trash2,
+    Heading1, Heading2, List, Quote, Minus, Youtube, Smile, Check, Link,
+    Bell, Mail, MessageSquare, Ticket
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Event, EventStatus, EventType } from "@/types";
 import { cn } from "@/lib/utils";
@@ -19,6 +27,12 @@ import { format } from "date-fns";
 import { tr } from "date-fns/locale";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface EditEventModalProps {
     isOpen: boolean;
@@ -39,6 +53,14 @@ export function EditEventModal({ isOpen, onClose, eventId, communityId, currentU
     const [stats, setStats] = useState<{ attendeeCount: number, latestAttendees: any[] } | null>(null);
     const [attendees, setAttendees] = useState<any[]>([]);
 
+    // Formatting State
+    const [showYoutubeInput, setShowYoutubeInput] = useState(false);
+    const [youtubeLink, setYoutubeLink] = useState("");
+
+    // Notification State (Bound to settings)
+    const [emailSchedules, setEmailSchedules] = useState<any[]>([]);
+    const [isEmailReminderOpen, setIsEmailReminderOpen] = useState(false);
+
     // Add Attendee Search State
     const [searchQuery, setSearchQuery] = useState("");
     const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -51,6 +73,31 @@ export function EditEventModal({ isOpen, onClose, eventId, communityId, currentU
     const [attachments, setAttachments] = useState<any[]>([]);
     const [isUploading, setIsUploading] = useState(false);
 
+    // Advanced Settings State
+    const [settings, setSettings] = useState({
+        reminders: {
+            in_app_enabled: true,
+            email_enabled: true
+        },
+        notifications: {
+            send_post_notification: true,
+            send_confirmation_email: true
+        },
+        permissions: {
+            comments_disabled: false,
+            hide_attendees: false
+        },
+        attendees: {
+            rsvp_limit: null as number | null,
+            allow_guests: false
+        },
+        seo: {
+            meta_title: null as string | null,
+            meta_description: null as string | null,
+            og_image_url: null as string | null
+        }
+    });
+
     const [isSaving, startTransition] = useTransition();
 
     useEffect(() => {
@@ -58,8 +105,52 @@ export function EditEventModal({ isOpen, onClose, eventId, communityId, currentU
             setCoverImage(event.cover_image_url || null);
             setDescription(event.description || "");
             setAttachments(event.attachments || []);
+            // Load advanced settings
+            if (event.settings) {
+                setSettings(prev => ({
+                    reminders: { ...prev.reminders, ...event.settings?.reminders },
+                    notifications: { ...prev.notifications, ...event.settings?.notifications },
+                    permissions: { ...prev.permissions, ...event.settings?.permissions },
+                    attendees: { ...prev.attendees, ...event.settings?.attendees },
+                    seo: { ...prev.seo, ...event.settings?.seo }
+                }));
+            }
         }
     }, [event]);
+
+    // Fetch Email Schedules
+    useEffect(() => {
+        if (isOpen && eventId && activeTab === 'reminders') {
+            getEmailSchedules(eventId).then(setEmailSchedules);
+        }
+    }, [isOpen, eventId, activeTab]);
+
+    const handleAddEmailSchedule = async (data: { subject: string; content: string; scheduledAt: Date }) => {
+        try {
+            await createEmailSchedule({
+                eventId,
+                subject: data.subject,
+                content: data.content,
+                scheduledAt: data.scheduledAt
+            });
+            toast.success("E-posta hatırlatması planlandı.");
+            // Refresh
+            getEmailSchedules(eventId).then(setEmailSchedules);
+        } catch (error) {
+            toast.error("Planlama başarısız.");
+        }
+    };
+
+    const handleDeleteEmailSchedule = async (id: string) => {
+        if (!confirm("Bu hatırlatmayı silmek istediğinize emin misiniz?")) return;
+        try {
+            await deleteEmailSchedule(id);
+            toast.success("Hatırlatma silindi.");
+            setEmailSchedules(prev => prev.filter(s => s.id !== id));
+        } catch (error) {
+            toast.error("Silme başarısız.");
+        }
+    };
 
     const uploadFile = async (file: File) => {
         // Validation
@@ -106,6 +197,44 @@ export function EditEventModal({ isOpen, onClose, eventId, communityId, currentU
         } finally {
             setIsUploading(false);
         }
+    };
+
+    // Helper to insert text into description
+    const insertTextAtCursor = (textToInsert: string) => {
+        setDescription(prev => {
+            const separator = prev.length > 0 && !prev.endsWith('\n') ? '\n' : '';
+            return prev + separator + textToInsert;
+        });
+    };
+
+    const handleFormatting = (type: 'h1' | 'h2' | 'list' | 'quote' | 'divider') => {
+        switch (type) {
+            case 'h1':
+                insertTextAtCursor('# ');
+                break;
+            case 'h2':
+                insertTextAtCursor('## ');
+                break;
+            case 'list':
+                insertTextAtCursor('- ');
+                break;
+            case 'quote':
+                insertTextAtCursor('> ');
+                break;
+            case 'divider':
+                insertTextAtCursor('---\n');
+                break;
+        }
+    };
+
+    const handleAddYoutubeLink = () => {
+        if (!youtubeLink) {
+            setShowYoutubeInput(false);
+            return;
+        }
+        insertTextAtCursor(description ? `\n\n${youtubeLink}\n` : youtubeLink);
+        setYoutubeLink("");
+        setShowYoutubeInput(false);
     };
 
     const handleCoverImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -403,6 +532,7 @@ export function EditEventModal({ isOpen, onClose, eventId, communityId, currentU
                 isPaid,
                 ticketPrice: isPaid ? parseFloat(ticketPrice) : 0,
                 recurrence: repeatFrequency,
+                settings,
             });
 
             if (showToast) toast.success("Değişiklikler kaydedildi!");
@@ -486,9 +616,9 @@ export function EditEventModal({ isOpen, onClose, eventId, communityId, currentU
                             <TabButton id="people" label="Kişiler" />
                             <TabButton id="basic_info" label="Temel Bilgiler" />
                             <TabButton id="post_details" label="Detaylar" />
-                            <TabButton id="notifications" label="Notifications" />
-                            <TabButton id="reminders" label="Reminders" />
-                            <TabButton id="advanced" label="Advanced" />
+                            <TabButton id="notifications" label="Bildirimler" />
+                            <TabButton id="reminders" label="Hatırlatıcılar" />
+                            <TabButton id="advanced" label="Gelişmiş" />
                         </div>
                     </div>
 
@@ -754,23 +884,23 @@ export function EditEventModal({ isOpen, onClose, eventId, communityId, currentU
                                             </div>
                                         </div>
                                     ) : (
-                                        <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 flex flex-col items-center justify-center gap-3 transition-colors hover:bg-gray-50 hover:border-gray-300">
-                                            <div className="h-12 w-12 bg-gray-100 rounded-full flex items-center justify-center">
+                                        <label className="border-2 border-dashed border-gray-200 rounded-xl p-8 flex flex-col items-center justify-center gap-3 transition-colors hover:bg-gray-50 hover:border-gray-300 cursor-pointer relative group/upload">
+                                            <input
+                                                type="file"
+                                                className="absolute inset-0 opacity-0 cursor-pointer"
+                                                accept="image/*"
+                                                onChange={handleCoverImageUpload}
+                                            />
+                                            <div className="h-12 w-12 bg-gray-100 rounded-full flex items-center justify-center group-hover/upload:bg-gray-200 transition-colors">
                                                 <ImageIcon className="w-6 h-6 text-gray-400" />
                                             </div>
                                             <div className="text-center">
-                                                <button className="text-base font-semibold text-gray-900 hover:underline relative">
+                                                <span className="text-base font-semibold text-gray-900 group-hover/upload:underline">
                                                     Görsel Yükle
-                                                    <input
-                                                        type="file"
-                                                        className="absolute inset-0 opacity-0 cursor-pointer"
-                                                        accept="image/*"
-                                                        onChange={handleCoverImageUpload}
-                                                    />
-                                                </button>
+                                                </span>
                                                 <p className="text-sm text-gray-500">Önerilen boyut: 1024x366</p>
                                             </div>
-                                        </div>
+                                        </label>
                                     )}
                                 </div>
 
@@ -786,47 +916,150 @@ export function EditEventModal({ isOpen, onClose, eventId, communityId, currentU
                                         />
 
                                         {/* Toolbar */}
-                                        <div className="bg-gray-50 border-t border-gray-100 px-4 py-3 flex items-center gap-2">
-                                            <Button
-                                                variant="ghost" size="icon" className="h-8 w-8 text-gray-500 hover:text-gray-900 hover:bg-gray-200/50"
-                                                onClick={handleVideoEmbed}
-                                                title="Video Ekle (Embed)"
-                                            >
-                                                <Video className="w-4 h-4" />
-                                            </Button>
-                                            <div className="relative">
-                                                <Button
-                                                    variant="ghost" size="icon" className="h-8 w-8 text-gray-500 hover:text-gray-900 hover:bg-gray-200/50"
-                                                >
-                                                    <ImageIcon className="w-4 h-4" />
+                                        <div className="bg-gray-50 border-t border-gray-100 px-4 py-3 flex items-center justify-between">
+                                            <div className="flex items-center gap-1 text-muted-foreground">
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="hover:bg-muted/50 hover:text-foreground relative group h-8 w-8">
+                                                            <div className="rounded-full border border-muted-foreground/30 p-1 group-hover:border-primary group-hover:text-primary transition-colors">
+                                                                <Plus className="w-3 h-3" />
+                                                            </div>
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="start" className="w-56 p-2" side="top">
+                                                        <div className="text-xs font-semibold text-muted-foreground px-2 py-1 mb-1 uppercase tracking-wider">Temel Formatlama</div>
+                                                        <DropdownMenuItem onClick={() => handleFormatting('h1')} className="cursor-pointer gap-2">
+                                                            <Heading1 className="w-4 h-4" />
+                                                            <span>Başlık 1</span>
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => handleFormatting('h2')} className="cursor-pointer gap-2">
+                                                            <Heading2 className="w-4 h-4" />
+                                                            <span>Başlık 2</span>
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => handleFormatting('list')} className="cursor-pointer gap-2">
+                                                            <List className="w-4 h-4" />
+                                                            <span>Liste</span>
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => handleFormatting('quote')} className="cursor-pointer gap-2">
+                                                            <Quote className="w-4 h-4" />
+                                                            <span>Alıntı</span>
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => handleFormatting('divider')} className="cursor-pointer gap-2">
+                                                            <Minus className="w-4 h-4" />
+                                                            <span>Ayırıcı</span>
+                                                        </DropdownMenuItem>
+
+                                                        <div className="h-px bg-border my-2" />
+
+                                                        <div className="text-xs font-semibold text-muted-foreground px-2 py-1 mb-1 uppercase tracking-wider">Medya</div>
+                                                        <DropdownMenuItem className="cursor-pointer gap-2 relative">
+                                                            <ImageIcon className="w-4 h-4" />
+                                                            <span>Resim</span>
+                                                            <input
+                                                                type="file"
+                                                                className="absolute inset-0 opacity-0 cursor-pointer"
+                                                                accept="image/*"
+                                                                onChange={async (e) => {
+                                                                    const file = e.target.files?.[0];
+                                                                    if (!file) return;
+                                                                    try {
+                                                                        const url = await uploadFile(file);
+                                                                        setDescription(prev => prev + `\n![image](${url})`);
+                                                                        toast.success("Resim eklendi");
+                                                                    } catch (err) { }
+                                                                }}
+                                                            />
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem className="cursor-pointer gap-2 relative">
+                                                            <Paperclip className="w-4 h-4" />
+                                                            <span>Dosya</span>
+                                                            <input
+                                                                type="file"
+                                                                className="absolute inset-0 opacity-0 cursor-pointer"
+                                                                onChange={handleAttachmentUpload}
+                                                            />
+                                                        </DropdownMenuItem>
+
+                                                        <div className="h-px bg-border my-2" />
+
+                                                        <div className="text-xs font-semibold text-muted-foreground px-2 py-1 mb-1 uppercase tracking-wider">Embed</div>
+                                                        <DropdownMenuItem onClick={() => setShowYoutubeInput(true)} className="cursor-pointer gap-2">
+                                                            <Link className="w-4 h-4" />
+                                                            <span>Video / Embed</span>
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+
+                                                <Button variant="ghost" size="icon" className="hover:bg-muted/50 hover:text-foreground relative overflow-hidden h-8 w-8 text-gray-500">
+                                                    <label className="cursor-pointer flex items-center justify-center w-full h-full absolute inset-0">
+                                                        <ImageIcon className="w-4 h-4" />
+                                                        <input
+                                                            type="file"
+                                                            accept="image/*"
+                                                            className="hidden"
+                                                            onChange={async (e) => {
+                                                                const file = e.target.files?.[0];
+                                                                if (!file) return;
+                                                                try {
+                                                                    const url = await uploadFile(file);
+                                                                    setDescription(prev => prev + `\n![image](${url})`);
+                                                                    toast.success("Resim eklendi");
+                                                                } catch (err) { }
+                                                            }}
+                                                        />
+                                                    </label>
                                                 </Button>
-                                                <input
-                                                    type="file"
-                                                    className="absolute inset-0 opacity-0 cursor-pointer"
-                                                    accept="image/*"
-                                                    onChange={async (e) => {
-                                                        const file = e.target.files?.[0];
-                                                        if (!file) return;
-                                                        try {
-                                                            const url = await uploadFile(file);
-                                                            setDescription(prev => prev + `\n![image](${url})`);
-                                                            toast.success("Resim eklendi");
-                                                        } catch (err) { }
-                                                    }}
-                                                />
-                                            </div>
-                                            <div className="relative">
-                                                <Button
-                                                    variant="ghost" size="icon" className="h-8 w-8 text-gray-500 hover:text-gray-900 hover:bg-gray-200/50"
-                                                    title="Dosya Ekle"
-                                                >
-                                                    <Paperclip className="w-4 h-4" />
+
+                                                <Button variant="ghost" size="icon" className="hover:bg-muted/50 hover:text-foreground relative overflow-hidden h-8 w-8 text-gray-500">
+                                                    <label className="cursor-pointer flex items-center justify-center w-full h-full absolute inset-0">
+                                                        <Paperclip className="w-4 h-4" />
+                                                        <input
+                                                            type="file"
+                                                            className="hidden"
+                                                            onChange={handleAttachmentUpload}
+                                                        />
+                                                    </label>
                                                 </Button>
-                                                <input
-                                                    type="file"
-                                                    className="absolute inset-0 opacity-0 cursor-pointer"
-                                                    onChange={handleAttachmentUpload}
-                                                />
+
+                                                <Popover open={showYoutubeInput} onOpenChange={setShowYoutubeInput}>
+                                                    <PopoverTrigger asChild>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className={cn("hover:bg-muted/50 hover:text-foreground h-8 w-8 text-gray-500", showYoutubeInput && "bg-muted text-foreground")}
+                                                        >
+                                                            <Youtube className="w-4 h-4" />
+                                                        </Button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-80 p-4" side="top" align="start">
+                                                        <div className="space-y-3">
+                                                            <div className="space-y-1">
+                                                                <h4 className="text-sm font-medium leading-none">Video Ekle</h4>
+                                                                <p className="text-sm text-muted-foreground">Video (YouTube, Vimeo vb.) linkini buraya yapıştırın.</p>
+                                                            </div>
+                                                            <div className="flex gap-2">
+                                                                <Input
+                                                                    autoFocus
+                                                                    placeholder="https://youtube.com/..."
+                                                                    value={youtubeLink}
+                                                                    onChange={(e) => setYoutubeLink(e.target.value)}
+                                                                    onKeyDown={(e) => {
+                                                                        if (e.key === 'Enter') handleAddYoutubeLink();
+                                                                    }}
+                                                                    className="h-8"
+                                                                />
+                                                                <Button
+                                                                    size="sm"
+                                                                    onClick={handleAddYoutubeLink}
+                                                                    disabled={!youtubeLink}
+                                                                    className="h-8 bg-zinc-900 text-white hover:bg-zinc-800"
+                                                                >
+                                                                    Ekle
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    </PopoverContent>
+                                                </Popover>
                                             </div>
 
                                             <div className="ml-auto">
@@ -873,6 +1106,54 @@ export function EditEventModal({ isOpen, onClose, eventId, communityId, currentU
                                         </div>
                                     </div>
                                 )}
+                            </div>
+                        ) : activeTab === 'notifications' ? (
+                            <div className="space-y-12 animate-in fade-in zoom-in-95 duration-200">
+                                <div className="space-y-1">
+                                    <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Bildirimler</h1>
+                                </div>
+
+                                <div className="space-y-4 pt-4">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <Switch
+                                                checked={settings.notifications.send_post_notification}
+                                                onCheckedChange={(checked) => setSettings(prev => ({
+                                                    ...prev,
+                                                    notifications: { ...prev.notifications, send_post_notification: checked }
+                                                }))}
+                                                className="data-[state=checked]:bg-gray-900"
+                                            />
+                                            <div className="flex items-center gap-2">
+                                                <Label className="text-base font-medium text-gray-900">
+                                                    {selectedChannelId
+                                                        ? `${channels.find(c => c.id === selectedChannelId)?.name || 'Alan'} üyelerine e-posta bildirimi gönder`
+                                                        : "Alan üyelerine e-posta bildirimi gönder"}
+                                                </Label>
+                                                <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4 pt-4">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <Switch
+                                                checked={settings.notifications.send_confirmation_email}
+                                                onCheckedChange={(checked) => setSettings(prev => ({
+                                                    ...prev,
+                                                    notifications: { ...prev.notifications, send_confirmation_email: checked }
+                                                }))}
+                                                className="data-[state=checked]:bg-gray-900"
+                                            />
+                                            <div className="flex items-center gap-2">
+                                                <Label className="text-base font-medium text-gray-900">Kayıt yapan katılımcıya onay bildirimi gönder</Label>
+                                                <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         ) : activeTab === 'basic_info' ? (
                             <div className="space-y-12 animate-in fade-in zoom-in-95 duration-200">
@@ -1181,6 +1462,282 @@ export function EditEventModal({ isOpen, onClose, eventId, communityId, currentU
                                     </Button>
                                 </div>
                             </div>
+                        ) : activeTab === 'reminders' ? (
+                            /* Hatırlatıcılar Tab - Refined UI (Matching Notifications Style) */
+                            <div className="space-y-12 animate-in fade-in zoom-in-95 duration-200">
+                                <div className="space-y-1">
+                                    <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Hatırlatıcılar</h1>
+                                    <p className="text-gray-500">Katılımcılarınıza etkinlik öncesi otomatik bildirimler gönderin.</p>
+                                </div>
+
+                                <div className="space-y-4 pt-4">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <Switch
+                                                checked={settings.reminders.in_app_enabled}
+                                                onCheckedChange={(checked) => setSettings(prev => ({
+                                                    ...prev,
+                                                    reminders: { ...prev.reminders, in_app_enabled: checked }
+                                                }))}
+                                                className="data-[state=checked]:bg-gray-900"
+                                            />
+                                            <div className="flex items-center gap-2">
+                                                <Label className="text-base font-medium text-gray-900">Uygulama içi bildirim gönder (15dk önce)</Label>
+                                                <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <Switch
+                                                checked={settings.reminders.email_enabled}
+                                                onCheckedChange={(checked) => setSettings(prev => ({
+                                                    ...prev,
+                                                    reminders: { ...prev.reminders, email_enabled: checked }
+                                                }))}
+                                                className="data-[state=checked]:bg-gray-900"
+                                            />
+                                            <div className="flex items-center gap-2">
+                                                <Label className="text-base font-medium text-gray-900">E-posta hatırlatması gönder (1 saat önce)</Label>
+                                                <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-6 pt-6">
+                                    <h3 className="text-xl font-bold text-gray-900 tracking-tight">Email schedule</h3>
+
+                                    <div className="space-y-3">
+                                        {emailSchedules.map((schedule) => (
+                                            <div key={schedule.id} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg p-4">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="h-10 w-10 bg-white rounded-lg flex items-center justify-center border border-gray-200">
+                                                        <Mail className="w-5 h-5 text-gray-500" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-semibold text-gray-900 text-sm">{schedule.subject}</p>
+                                                        <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
+                                                            <span>To: {schedule.audience === 'all' ? 'Everyone' : schedule.audience === 'invited' ? 'Invited' : 'Going'}</span>
+                                                            <span>•</span>
+                                                            <span>Scheduled: {format(new Date(schedule.scheduled_at), "MMM d, yyyy 'at' h:mm a")}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" className="h-8 w-8 p-0 text-gray-500 hover:text-gray-900">
+                                                            <MoreHorizontal className="w-4 h-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuItem
+                                                            className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                                                            onClick={() => handleDeleteEmailSchedule(schedule.id)}
+                                                        >
+                                                            <Trash2 className="w-4 h-4 mr-2" />
+                                                            Delete
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </div>
+                                        ))}
+
+                                        <Button
+                                            variant="outline"
+                                            className="rounded-full border-gray-300 font-medium"
+                                            onClick={() => setIsEmailReminderOpen(true)}
+                                        >
+                                            Add reminder
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                <EmailReminderDialog
+                                    open={isEmailReminderOpen}
+                                    onOpenChange={setIsEmailReminderOpen}
+                                    eventTitle={title}
+                                    eventDate={startDate ? new Date(startDate) : undefined}
+                                    onSave={handleAddEmailSchedule}
+                                />
+                            </div>
+                        ) : activeTab === 'advanced' ? (
+                            /* Gelişmiş Tab - Refined UI (Matching Notifications Style) */
+                            <div className="space-y-12 animate-in fade-in zoom-in-95 duration-200 pb-20">
+                                <div className="space-y-1">
+                                    <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Gelişmiş Ayarlar</h1>
+                                    <p className="text-gray-500">İzinler, katılım kuralları ve SEO yapılandırması.</p>
+                                </div>
+
+                                {/* İzinler Section */}
+                                <section className="space-y-6">
+                                    <h3 className="text-2xl font-bold text-gray-900 tracking-tight">İzinler & Gizlilik</h3>
+                                    <div className="space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <Switch
+                                                    checked={settings.permissions.comments_disabled}
+                                                    onCheckedChange={(checked) => setSettings(prev => ({
+                                                        ...prev,
+                                                        permissions: { ...prev.permissions, comments_disabled: checked }
+                                                    }))}
+                                                    className="data-[state=checked]:bg-gray-900"
+                                                />
+                                                <div className="flex items-center gap-2">
+                                                    <Label className="text-base font-medium text-gray-900">Yorumları kapat</Label>
+                                                    <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <Switch
+                                                    checked={settings.permissions.hide_attendees}
+                                                    onCheckedChange={(checked) => setSettings(prev => ({
+                                                        ...prev,
+                                                        permissions: { ...prev.permissions, hide_attendees: checked }
+                                                    }))}
+                                                    className="data-[state=checked]:bg-gray-900"
+                                                />
+                                                <div className="flex items-center gap-2">
+                                                    <Label className="text-base font-medium text-gray-900">Katılımcıları gizle</Label>
+                                                    <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </section>
+
+                                {/* Katılım Ayarları Section */}
+                                <section className="space-y-6">
+                                    <h3 className="text-2xl font-bold text-gray-900 tracking-tight">Katılım</h3>
+                                    <div className="space-y-6">
+                                        {/* RSVP Limit */}
+                                        <div className="space-y-2">
+                                            <Label className="text-base font-bold text-gray-900">Kontenjan (Kişi Sayısı)</Label>
+                                            <Input
+                                                type="number"
+                                                placeholder="Sınırsız"
+                                                value={settings.attendees.rsvp_limit ?? ''}
+                                                onChange={(e) => setSettings(prev => ({
+                                                    ...prev,
+                                                    attendees: { ...prev.attendees, rsvp_limit: e.target.value ? parseInt(e.target.value) : null }
+                                                }))}
+                                                className="max-w-[200px] bg-white border-gray-300 focus:border-gray-900 focus:ring-0 rounded-md"
+                                            />
+                                            <p className="text-xs text-gray-500">Boş bırakırsanız sınırsız olur.</p>
+                                        </div>
+
+                                        {/* Allow Guests */}
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <Switch
+                                                    checked={settings.attendees.allow_guests}
+                                                    onCheckedChange={(checked) => setSettings(prev => ({
+                                                        ...prev,
+                                                        attendees: { ...prev.attendees, allow_guests: checked }
+                                                    }))}
+                                                    className="data-[state=checked]:bg-gray-900"
+                                                />
+                                                <div className="flex items-center gap-2">
+                                                    <Label className="text-base font-medium text-gray-900">Misafir kaydına izin ver</Label>
+                                                    <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </section>
+
+                                {/* SEO & Sosyal Medya Section */}
+                                <section className="space-y-6">
+                                    <h3 className="text-2xl font-bold text-gray-900 tracking-tight">SEO & Paylaşım</h3>
+                                    <div className="space-y-6">
+                                        <div className="space-y-2">
+                                            <Label className="text-base font-bold text-gray-900">Meta Başlık</Label>
+                                            <Input
+                                                placeholder={title || 'Varsayılan: Etkinlik başlığı'}
+                                                value={settings.seo.meta_title || ''}
+                                                onChange={(e) => setSettings(prev => ({
+                                                    ...prev,
+                                                    seo: { ...prev.seo, meta_title: e.target.value || null }
+                                                }))}
+                                                className="bg-white border-gray-300 focus:border-gray-900 focus:ring-0 rounded-md"
+                                            />
+                                            <p className="text-xs text-gray-500">Tarayıcı sekmesinde ve Google sonuçlarında görünür.</p>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label className="text-base font-bold text-gray-900">Meta Açıklama</Label>
+                                            <Textarea
+                                                placeholder={description?.substring(0, 150) || 'Varsayılan: Etkinlik açıklaması (ilk 150 karakter)...'}
+                                                value={settings.seo.meta_description || ''}
+                                                onChange={(e) => setSettings(prev => ({
+                                                    ...prev,
+                                                    seo: { ...prev.seo, meta_description: e.target.value || null }
+                                                }))}
+                                                rows={3}
+                                                className="bg-white border-gray-300 focus:border-gray-900 focus:ring-0 rounded-md resize-none"
+                                            />
+                                            <p className="text-xs text-gray-500">Google sonuçlarında başlığın altında görünür.</p>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label className="text-base font-bold text-gray-900">Sosyal Medya Görseli (OG Image)</Label>
+                                            <div className="flex items-start gap-6 pt-2">
+                                                {settings.seo.og_image_url ? (
+                                                    <div className="relative group rounded-lg overflow-hidden border border-gray-200 shadow-sm transition-all hover:shadow-md">
+                                                        <img src={settings.seo.og_image_url} alt="OG Image" className="w-[240px] h-[126px] object-cover" />
+                                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                            <button
+                                                                onClick={() => setSettings(prev => ({ ...prev, seo: { ...prev.seo, og_image_url: null } }))}
+                                                                className="bg-white/90 text-red-600 rounded-full p-2 hover:bg-white hover:scale-110 transition-all"
+                                                            >
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <label className="flex flex-col items-center justify-center w-full max-w-[240px] h-[126px] border-2 border-dashed border-gray-200 rounded-lg cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-all group overflow-hidden bg-gray-50/50">
+                                                        <div className="w-10 h-10 rounded-full bg-white group-hover:bg-gray-100 flex items-center justify-center mb-2 transition-colors border border-gray-100">
+                                                            <ImageIcon className="w-5 h-5 text-gray-400 group-hover:text-gray-600" />
+                                                        </div>
+                                                        <span className="text-xs font-medium text-gray-500 group-hover:text-gray-700">Görsel Yükle</span>
+                                                        <span className="text-[10px] text-gray-400 mt-1">1200x630 px</span>
+                                                        <input
+                                                            type="file"
+                                                            accept="image/*"
+                                                            className="hidden"
+                                                            onChange={async (e) => {
+                                                                const file = e.target.files?.[0];
+                                                                if (file) {
+                                                                    try {
+                                                                        const url = await uploadFile(file);
+                                                                        setSettings(prev => ({ ...prev, seo: { ...prev.seo, og_image_url: url } }));
+                                                                    } catch (error) {
+                                                                        console.error(error);
+                                                                    }
+                                                                }
+                                                            }}
+                                                        />
+                                                    </label>
+                                                )}
+                                                <div className="flex-1 space-y-2 pt-1">
+                                                    <p className="text-sm text-gray-500 leading-relaxed">
+                                                        Paylaşımlarda görünecek görsel.
+                                                        Eğer yüklemezseniz, etkinliğin kapak resmi veya varsayılan topluluk resmi kullanılır.
+                                                    </p>
+                                                    <p className="text-xs font-medium text-gray-400">
+                                                        Önerilen boyut: 1200 x 630 piksel.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </section>
+
+                            </div>
                         ) : (
                             <div className="flex flex-col items-center justify-center py-32 text-center space-y-4">
                                 <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center">
@@ -1204,7 +1761,7 @@ export function EditEventModal({ isOpen, onClose, eventId, communityId, currentU
                         Publish
                     </Button>
                 </div>
-            </SheetContent>
+            </SheetContent >
         </Sheet >
     );
 }

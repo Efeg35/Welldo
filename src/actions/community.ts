@@ -158,7 +158,7 @@ export async function createPost(
     revalidatePath('/community');
 }
 
-export async function toggleLike(postId: string) {
+export async function toggleLike(resourceId: string, type: 'post' | 'event') {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -166,49 +166,83 @@ export async function toggleLike(postId: string) {
         throw new Error("Unauthorized");
     }
 
+    const idField = type === 'post' ? 'post_id' : 'event_id';
+
     // Check if like exists
     const { data: existingLike } = await supabase
-        .from('post_likes')
+        .from('likes')
         .select()
-        .eq('post_id', postId)
+        .eq(idField, resourceId)
         .eq('user_id', user.id)
         .single();
 
     if (existingLike) {
         // Unlike
         await supabase
-            .from('post_likes')
+            .from('likes')
             .delete()
-            .eq('post_id', postId)
+            .eq(idField, resourceId)
             .eq('user_id', user.id);
     } else {
         // Like
+        const insertData: any = {
+            user_id: user.id
+        };
+        insertData[idField] = resourceId;
+
         await supabase
-            .from('post_likes')
-            .insert({
-                post_id: postId,
-                user_id: user.id,
-            });
+            .from('likes')
+            .insert(insertData);
 
-        // Create Notification
-        const { data: post } = await supabase
-            .from('posts')
-            .select('user_id')
-            .eq('id', postId)
-            .single();
+        // Create Notification (Only for posts for now, events maybe later)
+        if (type === 'post') {
+            const { data: post } = await supabase
+                .from('posts')
+                .select('user_id')
+                .eq('id', resourceId)
+                .single();
 
-        if (post && post.user_id !== user.id) {
-            await supabase.from('notifications').insert({
-                user_id: post.user_id,
-                actor_id: user.id,
-                type: 'like',
-                resource_id: postId,
-                resource_type: 'post'
-            });
+            if (post && post.user_id !== user.id) {
+                await supabase.from('notifications').insert({
+                    user_id: post.user_id,
+                    actor_id: user.id,
+                    type: 'like',
+                    resource_id: resourceId,
+                    resource_type: 'post'
+                });
+            }
         }
     }
 
     revalidatePath('/community');
+    if (type === 'event') {
+        revalidatePath(`/events/${resourceId}`);
+    }
+}
+
+export async function getLikes(resourceId: string, type: 'post' | 'event') {
+    const supabase = await createClient();
+    const idField = type === 'post' ? 'post_id' : 'event_id';
+
+    const { count } = await supabase
+        .from('likes')
+        .select('*', { count: 'exact', head: true })
+        .eq(idField, resourceId);
+
+    const { data: { user } } = await supabase.auth.getUser();
+    let isLiked = false;
+
+    if (user) {
+        const { data } = await supabase
+            .from('likes')
+            .select('user_id')
+            .eq(idField, resourceId)
+            .eq('user_id', user.id)
+            .single();
+        isLiked = !!data;
+    }
+
+    return { count: count || 0, isLiked };
 }
 
 export async function toggleBookmark(postId: string) {
@@ -441,7 +475,7 @@ export async function markChannelAsRead(channelId: string) {
     }
 }
 
-export async function createComment(postId: string, content: string) {
+export async function createComment(resourceId: string, content: string, type: 'post' | 'event' = 'post') {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -449,43 +483,54 @@ export async function createComment(postId: string, content: string) {
         throw new Error("Unauthorized");
     }
 
+    const payload: any = {
+        user_id: user.id,
+        content,
+    };
+
+    if (type === 'post') {
+        payload.post_id = resourceId;
+    } else {
+        payload.event_id = resourceId;
+    }
+
     const { error } = await supabase
         .from('comments')
-        .insert({
-            user_id: user.id,
-            post_id: postId,
-            content,
-        });
+        .insert(payload);
 
     if (error) {
         console.error("Error creating comment:", error);
         throw new Error("Failed to create comment");
     }
 
-    // Create Notification
-    const { data: post } = await supabase
-        .from('posts')
-        .select('user_id')
-        .eq('id', postId)
-        .single();
+    if (type === 'post') {
+        // Create Notification for Post Owner
+        const { data: post } = await supabase
+            .from('posts')
+            .select('user_id')
+            .eq('id', resourceId)
+            .single();
 
-    if (post && post.user_id !== user.id) {
-        await supabase.from('notifications').insert({
-            user_id: post.user_id,
-            actor_id: user.id,
-            type: 'comment',
-            resource_id: postId,
-            resource_type: 'post'
-        });
+        if (post && post.user_id !== user.id) {
+            await supabase.from('notifications').insert({
+                user_id: post.user_id,
+                actor_id: user.id,
+                type: 'comment',
+                resource_id: resourceId,
+                resource_type: 'post'
+            });
+        }
+        revalidatePath(`/community/post/${resourceId}`);
+    } else {
+        // Create Notification for Event Organizer (Future Todo)
+        revalidatePath(`/events/${resourceId}`);
     }
-
-    revalidatePath(`/community/post/${postId}`);
 }
 
-export async function getComments(postId: string) {
+export async function getComments(resourceId: string, type: 'post' | 'event' = 'post') {
     const supabase = await createClient();
 
-    const { data, error } = await supabase
+    let query = supabase
         .from('comments')
         .select(`
             *,
@@ -495,9 +540,15 @@ export async function getComments(postId: string) {
                 avatar_url,
                 role
             )
-        `)
-        .eq('post_id', postId)
-        .order('created_at', { ascending: true });
+        `);
+
+    if (type === 'post') {
+        query = query.eq('post_id', resourceId);
+    } else {
+        query = query.eq('event_id', resourceId);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: true });
 
     if (error) {
         console.error("Error fetching comments:", error);
@@ -1024,4 +1075,24 @@ export async function getCommunityChannels(communityId: string, type?: string) {
     }
 
     return channels;
+}
+
+export async function cancelEventResponse(eventId: string) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) throw new Error("Unauthorized");
+
+    const { error } = await supabase
+        .from('event_responses')
+        .delete()
+        .eq('event_id', eventId)
+        .eq('user_id', user.id);
+
+    if (error) {
+        console.error("Error cancelling event response:", error);
+        throw new Error("Katılım iptal edilemedi");
+    }
+
+    revalidatePath(`/events/${eventId}`);
 }

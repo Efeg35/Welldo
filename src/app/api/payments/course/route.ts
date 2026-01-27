@@ -64,16 +64,16 @@ export async function POST(request: Request) {
 
         // 2. Calculate Split
         const price = Number(actualPaywall.price);
-        const { paidPrice, subMerchantPrice } = calculatePaymentSplit(price);
+        const { subMerchantPrice } = calculatePaymentSplit(price);
+        const paidPrice = price; // Total price is paid price
 
         // 3. Create Checkout Form
-        const conversationId = uuidv4();
         const userIp = request.headers.get('x-forwarded-for') || '127.0.0.1';
 
         const checkoutResult = await createCheckoutForm({
-            conversationId,
             price: price.toString(),
             paidPrice: paidPrice.toString(), // Usually same as price unless discount
+            currency: 'TRY',
             basketId: course.id,
             paymentGroup: 'PRODUCT',
             buyer: {
@@ -106,8 +106,7 @@ export async function POST(request: Request) {
                 {
                     id: course.id,
                     name: course.title,
-                    category1: 'Education',
-                    itemType: 'VIRTUAL',
+                    category: 'Education',
                     price: price.toString(),
                     subMerchantKey: subMerchantKey,
                     subMerchantPrice: subMerchantPrice.toString(),
@@ -117,7 +116,7 @@ export async function POST(request: Request) {
         });
 
         if (!checkoutResult.success || !checkoutResult.token) {
-            console.error('Iyzico Checkout Error:', checkoutResult.errorMessage);
+            console.error('Iyzico Checkout Error:', checkoutResult.error);
             return NextResponse.json({ error: 'Payment initialization failed' }, { status: 500 });
         }
 
@@ -139,7 +138,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Database error' }, { status: 500 });
         }
 
-        return NextResponse.json({ paymentPageUrl: checkoutResult.paymentPageUrl });
+        return NextResponse.json({ checkoutFormContent: checkoutResult.checkoutFormContent, token: checkoutResult.token });
 
     } catch (error: any) {
         console.error('Unexpected error:', error);
