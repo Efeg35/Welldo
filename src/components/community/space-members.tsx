@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { getInitials } from "@/lib/utils";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -190,7 +191,9 @@ export function SpaceMembers({
                                                         <div className="flex items-center gap-3">
                                                             <Avatar className="h-8 w-8">
                                                                 <AvatarImage src={user.avatar_url || ""} />
-                                                                <AvatarFallback>{user.full_name?.charAt(0)}</AvatarFallback>
+                                                                <AvatarFallback className="bg-gray-100 text-gray-700 font-semibold text-xs">
+                                                                    {getInitials(user.full_name as string)}
+                                                                </AvatarFallback>
                                                             </Avatar>
                                                             <div className="text-sm font-medium">{user.full_name}</div>
                                                         </div>
@@ -245,7 +248,9 @@ export function SpaceMembers({
                                         <div className="flex items-center gap-3">
                                             <Avatar className="h-9 w-9">
                                                 <AvatarImage src={member.avatar_url || ""} />
-                                                <AvatarFallback>{member.full_name?.charAt(0)}</AvatarFallback>
+                                                <AvatarFallback className="bg-gray-100 text-gray-700 font-semibold">
+                                                    {getInitials(member.full_name as string)}
+                                                </AvatarFallback>
                                             </Avatar>
                                             <div className="flex flex-col">
                                                 <span className="font-medium text-gray-900">{member.full_name}</span>

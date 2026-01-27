@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { MessageCircle, Plus, CheckCircle2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, getInitials } from "@/lib/utils";
 import { getConversations } from "@/actions/dm";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { formatDistanceToNow } from "date-fns";
@@ -132,7 +132,9 @@ export function DirectMessagePopover() {
                                                 >
                                                     <Avatar className="h-10 w-10">
                                                         <AvatarImage src={conv.other_participant?.avatar_url || undefined} />
-                                                        <AvatarFallback>{conv.other_participant?.full_name?.charAt(0)}</AvatarFallback>
+                                                        <AvatarFallback className="bg-gray-100 text-gray-700 font-semibold text-sm">
+                                                            {getInitials(conv.other_participant?.full_name as string)}
+                                                        </AvatarFallback>
                                                     </Avatar>
                                                     <div className="flex-1 min-w-0">
                                                         <div className="flex items-center justify-between mb-0.5">

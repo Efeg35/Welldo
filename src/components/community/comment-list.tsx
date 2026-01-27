@@ -4,6 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
+import { getInitials } from "@/lib/utils";
 
 interface CommentListProps {
     comments: any[];
@@ -15,8 +16,10 @@ export function CommentList({ comments }: CommentListProps) {
             {comments.map((comment) => (
                 <div key={comment.id} className="flex gap-3 group">
                     <Avatar className="w-8 h-8 mt-1">
-                        <AvatarImage src={comment.profiles.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${comment.profiles.id}`} />
-                        <AvatarFallback>{comment.profiles.full_name?.charAt(0) || 'U'}</AvatarFallback>
+                        <AvatarImage src={comment.profiles.avatar_url || undefined} />
+                        <AvatarFallback className="bg-gray-100 text-gray-700 font-semibold text-xs">
+                            {getInitials(comment.profiles.full_name || undefined)}
+                        </AvatarFallback>
                     </Avatar>
                     <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">

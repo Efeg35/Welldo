@@ -7,7 +7,7 @@ import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 import { toggleLike, deletePost, toggleBookmark } from "@/actions/community";
 import { useOptimistic, useState, useTransition } from "react";
-import { cn } from "@/lib/utils";
+import { cn, getInitials } from "@/lib/utils";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -129,45 +129,82 @@ export function PostCard({ post, currentUserId, onClick }: PostCardProps) {
             <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
                     <Avatar className="w-10 h-10">
-                        <AvatarImage src={post.profiles?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${post.profiles?.id}`} />
-                        <AvatarFallback>{post.profiles?.full_name?.charAt(0) || 'U'}</AvatarFallback>
+                        <AvatarImage src={(post.profiles?.avatar_url as string) || undefined} />
+                        <AvatarFallback className="bg-gray-100 text-gray-700 font-semibold text-sm">
+                            {getInitials(post.profiles?.full_name as string)}
+                        </AvatarFallback>
                     </Avatar>
                     <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-medium">{post.profiles?.full_name}</span>
+                            {post.profiles?.role === 'instructor' && (
+                                <span className="text-[10px] bg-gray-900 text-white font-bold px-1.5 py-0.5 rounded-full uppercase">
+                                    Eğitmen
+                                </span>
+                            )}
+                            {post.profiles?.role === 'admin' && (
+                                <span className="text-[10px] bg-gray-700 text-white font-bold px-1.5 py-0.5 rounded-full uppercase">
+                                    Admin
+                                </span>
+                            )}
                         </div>
-                        <span className="text-sm text-muted-foreground">
-                            {formatDistanceToNow(new Date(post.created_at), { addSuffix: true, locale: tr })} • {post.profiles?.role === 'instructor' ? 'Eğitmen' : 'Üye'}
-                        </span>
+                        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                            {post.channel && (
+                                <>
+                                    <span>Posted in</span>
+                                    <Link
+                                        href={`/community/${post.channel.slug}`}
+                                        className="text-gray-900 hover:underline font-medium"
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        {post.channel.name}
+                                    </Link>
+                                    <span>•</span>
+                                </>
+                            )}
+                            <span>
+                                {formatDistanceToNow(new Date(post.created_at), { addSuffix: true, locale: tr })}
+                            </span>
+                        </div>
                     </div>
                 </div>
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                        <Button variant="ghost" size="icon" className="rounded-full hover:bg-muted/50">
-                            <MoreHorizontal className="w-5 h-5" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
-                        {canManage && (
-                            <>
-                                <CreatePost user={{ id: currentUserId }} post={post}>
-                                    <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="cursor-pointer">
-                                        <Edit className="w-4 h-4 mr-2" />
-                                        Düzenle
+                <div className="flex items-center gap-1">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className={cn("rounded-full hover:bg-muted/50 h-8 w-8", isBookmarked && "text-yellow-500")}
+                        onClick={handleBookmark}
+                    >
+                        <Bookmark className={cn("w-4 h-4", isBookmarked && "fill-current")} />
+                    </Button>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                            <Button variant="ghost" size="icon" className="rounded-full hover:bg-muted/50 h-8 w-8">
+                                <MoreHorizontal className="w-5 h-5" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                            {canManage && (
+                                <>
+                                    <CreatePost user={{ id: currentUserId }} post={post}>
+                                        <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="cursor-pointer">
+                                            <Edit className="w-4 h-4 mr-2" />
+                                            Düzenle
+                                        </DropdownMenuItem>
+                                    </CreatePost>
+                                    <DropdownMenuItem onClick={handleDeleteClick} className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50">
+                                        <Trash className="w-4 h-4 mr-2" />
+                                        Sil
                                     </DropdownMenuItem>
-                                </CreatePost>
-                                <DropdownMenuItem onClick={handleDeleteClick} className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50">
-                                    <Trash className="w-4 h-4 mr-2" />
-                                    Sil
-                                </DropdownMenuItem>
-                            </>
-                        )}
-                        <DropdownMenuItem onClick={handleShare} className="cursor-pointer">
-                            <ShareIcon className="w-4 h-4 mr-2" />
-                            Paylaş
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
+                                </>
+                            )}
+                            <DropdownMenuItem onClick={handleShare} className="cursor-pointer">
+                                <ShareIcon className="w-4 h-4 mr-2" />
+                                Paylaş
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
             </div>
 
             <Link

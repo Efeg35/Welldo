@@ -17,6 +17,7 @@ import { LogOut, User, Settings, CreditCard } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Profile } from "@/types";
 import Link from "next/link";
+import { getInitials } from "@/lib/utils";
 
 export function UserNav() {
     const router = useRouter();
@@ -54,8 +55,10 @@ export function UserNav() {
             <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-9 w-9 rounded-full">
                     <Avatar className="h-9 w-9">
-                        <AvatarImage src={profile?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.id || 'User'}`} />
-                        <AvatarFallback>{profile?.full_name?.charAt(0) || 'U'}</AvatarFallback>
+                        <AvatarImage src={profile?.avatar_url || undefined} />
+                        <AvatarFallback className="bg-gray-100 text-gray-700 font-semibold">
+                            {getInitials(profile?.full_name || user?.email || undefined)}
+                        </AvatarFallback>
                     </Avatar>
                 </Button>
             </DropdownMenuTrigger>

@@ -1096,3 +1096,206 @@ export async function cancelEventResponse(eventId: string) {
 
     revalidatePath(`/events/${eventId}`);
 }
+
+/**
+ * Get unified feed with posts and events mixed together, sorted by created_at.
+ * Pinned posts appear at the top.
+ */
+export async function getUnifiedFeed(communityId?: string, limit: number = 30) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    // 1. Fetch posts (matching the working getPosts pattern)
+    let postsQuery = supabase
+        .from('posts')
+        .select(`
+            *,
+            profiles:profiles!posts_user_id_fkey (
+                id,
+                full_name,
+                avatar_url,
+                role
+            ),
+            channel:channels (
+                id,
+                name,
+                slug,
+                icon,
+                type
+            ),
+            likes (
+                user_id
+            ),
+            bookmarks (
+                user_id
+            ),
+            comments (count)
+        `)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+    if (communityId) {
+        postsQuery = postsQuery.eq('community_id', communityId);
+    }
+
+    const { data: postsData, error: postsError } = await postsQuery;
+
+    if (postsError) {
+        console.error("Error fetching posts for unified feed:", JSON.stringify(postsError, null, 2));
+    }
+
+    const posts = (postsData || []).map((post: any) => ({
+        ...post,
+        feedType: 'post' as const,
+        _count: {
+            likes: post.likes?.length || 0,
+            comments: post.comments?.[0]?.count || 0
+        }
+    }));
+
+    // 2. Fetch published events (upcoming only for feed)
+    let eventsQuery = supabase
+        .from('events')
+        .select(`
+            *,
+            channel:channels (
+                id,
+                name,
+                slug,
+                icon,
+                type
+            ),
+            responses:event_responses (
+                user_id,
+                status
+            ),
+            bookmarks (
+                user_id
+            )
+        `)
+        .eq('status', 'published')
+        .gte('start_time', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+    if (communityId) {
+        eventsQuery = eventsQuery.eq('community_id', communityId);
+    }
+
+    const { data: eventsData, error: eventsError } = await eventsQuery;
+
+    if (eventsError) {
+        console.error("Error fetching events for unified feed:", JSON.stringify(eventsError, null, 2));
+    }
+
+    const events = (eventsData || []).map((event: any) => ({
+        ...event,
+        feedType: 'event' as const,
+        _count: {
+            responses: event.responses?.filter((r: any) => r.status === 'attending')?.length || 0
+        },
+        isAttending: user ? event.responses?.some((r: any) => r.user_id === user.id && r.status === 'attending') : false
+    }));
+
+    // 3. Merge and sort by created_at (newest first), with pinned at top
+    const combined = [...posts, ...events];
+    combined.sort((a, b) => {
+        // Pinned items first
+        if (a.is_pinned && !b.is_pinned) return -1;
+        if (!a.is_pinned && b.is_pinned) return 1;
+        // Then by date
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+
+    return combined.slice(0, limit);
+}
+
+/**
+ * Get upcoming events for the sidebar widget, sorted by start_time.
+ */
+export async function getUpcomingEventsForSidebar(communityId?: string, limit: number = 5) {
+    const supabase = await createClient();
+    const now = new Date().toISOString();
+
+    let query = supabase
+        .from('events')
+        .select(`
+            id,
+            title,
+            start_time,
+            end_time,
+            event_type,
+            channel:channels (
+                id,
+                name,
+                slug
+            )
+        `)
+        .eq('status', 'published')
+        .gte('start_time', now)
+        .order('start_time', { ascending: true })
+        .limit(limit);
+
+    if (communityId) {
+        query = query.eq('community_id', communityId);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+        console.error("Error fetching upcoming events:", JSON.stringify(error, null, 2));
+        return [];
+    }
+
+    return data || [];
+}
+
+/**
+ * Get trending posts (most commented in the last 7 days) for the sidebar widget.
+ */
+export async function getTrendingPosts(communityId?: string, limit: number = 3) {
+    const supabase = await createClient();
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    let query = supabase
+        .from('posts')
+        .select(`
+            id,
+            title,
+            content,
+            created_at,
+            profiles:profiles!posts_user_id_fkey (
+                id,
+                full_name,
+                avatar_url
+            ),
+            comments (count)
+        `)
+        .gte('created_at', sevenDaysAgo.toISOString())
+        .order('created_at', { ascending: false });
+
+    if (communityId) {
+        query = query.eq('community_id', communityId);
+    }
+
+    const { data, error } = await query.limit(50); // Fetch more to sort by comments
+
+    if (error) {
+        console.error("Error fetching trending posts:", error);
+        return [];
+    }
+
+    // Sort by comment count and take top N
+    const sorted = (data || [])
+        .map((post: any) => ({
+            ...post,
+            _count: {
+                comments: post.comments?.[0]?.count || 0
+            }
+        }))
+        .sort((a: any, b: any) => b._count.comments - a._count.comments)
+        .slice(0, limit);
+
+    return sorted;
+}

@@ -7,7 +7,7 @@ import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 import { useState, useTransition, useOptimistic } from "react";
 import { createComment, toggleLike } from "@/actions/community";
-import { cn } from "@/lib/utils";
+import { cn, getInitials } from "@/lib/utils";
 import { Post, Profile } from "@/types";
 import { toast } from "sonner";
 import Markdown from 'react-markdown';
@@ -75,13 +75,15 @@ export function PostContent({ post: initialPost, user }: PostContentProps) {
                     <div className="flex items-center gap-4">
                         <Avatar className="w-12 h-12">
                             <AvatarImage src={post.profiles?.avatar_url || ""} />
-                            <AvatarFallback>{post.profiles?.full_name?.charAt(0)}</AvatarFallback>
+                            <AvatarFallback className="bg-gray-100 text-gray-700 font-semibold">
+                                {getInitials(post.profiles?.full_name as string)}
+                            </AvatarFallback>
                         </Avatar>
                         <div>
                             <div className="flex items-center gap-2">
                                 <h2 className="font-bold text-lg leading-none">{post.profiles?.full_name}</h2>
                                 {post.profiles?.role === 'instructor' && (
-                                    <span className="bg-gray-900 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">Admin</span>
+                                    <span className="bg-gray-900 text-white text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Eğitmen</span>
                                 )}
                             </div>
                             <p className="text-sm text-muted-foreground mt-1">
@@ -118,7 +120,7 @@ export function PostContent({ post: initialPost, user }: PostContentProps) {
                         onClick={handleLike}
                         className={cn(
                             "flex items-center gap-2 transition-colors font-medium",
-                            optimisticLike.hasLiked ? "text-[#408FED]" : "text-muted-foreground hover:text-foreground"
+                            optimisticLike.hasLiked ? "text-gray-900" : "text-muted-foreground hover:text-foreground"
                         )}
                     >
                         <ThumbsUp className={cn("w-5 h-5", optimisticLike.hasLiked && "fill-current")} />
@@ -139,13 +141,15 @@ export function PostContent({ post: initialPost, user }: PostContentProps) {
                         <div key={c.id} className="flex gap-4 group">
                             <Avatar className="w-10 h-10 shrink-0">
                                 <AvatarImage src={c.profiles?.avatar_url} />
-                                <AvatarFallback>{c.profiles?.full_name?.charAt(0)}</AvatarFallback>
+                                <AvatarFallback className="bg-gray-100 text-gray-700 font-semibold text-sm">
+                                    {getInitials(c.profiles?.full_name as string)}
+                                </AvatarFallback>
                             </Avatar>
                             <div className="flex-1 space-y-1">
                                 <div className="flex items-center gap-2">
                                     <span className="font-bold text-gray-900">{c.profiles?.full_name}</span>
                                     {c.profiles?.role === 'instructor' && (
-                                        <span className="bg-gray-200 text-gray-700 text-[10px] px-1.5 py-0.5 rounded-sm font-bold">MOD</span>
+                                        <span className="bg-gray-200 text-gray-700 text-[10px] px-1.5 py-0.5 rounded-full font-bold">MOD</span>
                                     )}
                                     <span className="text-xs text-muted-foreground">
                                         {c.created_at && !isNaN(new Date(c.created_at).getTime())
@@ -178,7 +182,9 @@ export function PostContent({ post: initialPost, user }: PostContentProps) {
                 <div className="flex gap-4 border-t border-gray-100 pt-8">
                     <Avatar className="w-10 h-10 shrink-0">
                         <AvatarImage src={user.avatar_url || ""} />
-                        <AvatarFallback>{user.full_name?.charAt(0)}</AvatarFallback>
+                        <AvatarFallback className="bg-gray-100 text-gray-700 font-semibold text-sm">
+                            {getInitials(user.full_name as string)}
+                        </AvatarFallback>
                     </Avatar>
                     <div className="flex-1">
                         <div className="bg-white border focus-within:ring-1 focus-within:ring-gray-300 border-gray-200 rounded-xl shadow-sm overflow-hidden transition-all">

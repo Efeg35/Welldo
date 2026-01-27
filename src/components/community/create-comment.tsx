@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { createComment } from "@/actions/community";
 import { useState, useTransition } from "react";
 import { Send } from "lucide-react";
+import { getInitials } from "@/lib/utils";
 
 interface CreateCommentProps {
     postId?: string;
@@ -37,21 +38,23 @@ export function CreateComment({ postId, eventId, user }: CreateCommentProps) {
     return (
         <div className="flex gap-4 items-start">
             <Avatar className="w-8 h-8">
-                <AvatarImage src={user ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.id}` : undefined} />
-                <AvatarFallback>U</AvatarFallback>
+                <AvatarImage src={user?.avatar_url || undefined} />
+                <AvatarFallback className="bg-gray-100 text-gray-700 font-semibold text-xs">
+                    {getInitials(user?.full_name || user?.user_metadata?.full_name || user?.email || undefined)}
+                </AvatarFallback>
             </Avatar>
             <div className="flex-1 relative">
                 <textarea
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
                     placeholder="Yorum yaz..."
-                    className="w-full bg-card border border-border rounded-lg p-3 pr-12 text-sm focus:outline-none focus:ring-1 focus:ring-primary min-h-[40px] resize-none"
+                    className="w-full bg-card border border-border rounded-lg p-3 pr-12 text-sm focus:outline-none focus:ring-1 focus:ring-gray-300 min-h-[40px] resize-none"
                     rows={content.length > 50 ? 3 : 1}
                 />
                 <Button
                     size="icon"
                     variant="ghost"
-                    className="absolute right-2 top-1.5 h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
+                    className="absolute right-2 top-1.5 h-8 w-8 text-gray-900 hover:text-black hover:bg-gray-100"
                     onClick={handleSubmit}
                     disabled={!content.trim() || isPending}
                 >

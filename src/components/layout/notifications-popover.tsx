@@ -19,7 +19,7 @@ import {
 } from "@/actions/notifications";
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
-import { cn } from "@/lib/utils";
+import { cn, getInitials } from "@/lib/utils";
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -135,19 +135,19 @@ export function NotificationsPopover() {
                         <TabsList className="bg-transparent h-auto p-0 gap-4">
                             <TabsTrigger
                                 value="inbox"
-                                className="px-0 py-2 bg-transparent border-b-2 border-transparent data-[state=active]:border-primary rounded-none shadow-none"
+                                className="px-0 py-2 bg-transparent border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:text-black rounded-none shadow-none"
                             >
                                 Gelen Kutusu
                             </TabsTrigger>
                             <TabsTrigger
                                 value="all"
-                                className="px-0 py-2 bg-transparent border-b-2 border-transparent data-[state=active]:border-primary rounded-none shadow-none"
+                                className="px-0 py-2 bg-transparent border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:text-black rounded-none shadow-none"
                             >
                                 Tümü
                             </TabsTrigger>
                             <TabsTrigger
                                 value="archived"
-                                className="px-0 py-2 bg-transparent border-b-2 border-transparent data-[state=active]:border-primary rounded-none shadow-none"
+                                className="px-0 py-2 bg-transparent border-b-2 border-transparent data-[state=active]:border-black data-[state=active]:text-black rounded-none shadow-none"
                             >
                                 Arşivlendi
                             </TabsTrigger>
@@ -169,12 +169,14 @@ export function NotificationsPopover() {
                                             key={notification.id}
                                             className={cn(
                                                 "p-4 flex gap-3 group hover:bg-muted/50 transition-colors relative",
-                                                !notification.is_read && "bg-blue-50/50"
+                                                !notification.is_read && "bg-gray-50"
                                             )}
                                         >
                                             <Avatar className="h-10 w-10 shrink-0">
                                                 <AvatarImage src={notification.actor?.avatar_url} />
-                                                <AvatarFallback>U</AvatarFallback>
+                                                <AvatarFallback className="bg-gray-100 text-gray-700 font-semibold">
+                                                    {getInitials(notification.actor?.full_name as string)}
+                                                </AvatarFallback>
                                             </Avatar>
                                             <div className="flex-1 space-y-1">
                                                 <p className="text-sm leading-tight">

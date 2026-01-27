@@ -15,6 +15,7 @@ import { MapPin, Video, Calendar, User, Bookmark, MessageCircle, ExternalLink } 
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { formatDistanceToNow } from "date-fns";
+import { getInitials } from "@/lib/utils";
 
 export function BookmarksPopover() {
     const [open, setOpen] = useState(false);
@@ -128,7 +129,9 @@ export function BookmarksPopover() {
                                         <div className="flex items-start gap-3">
                                             <Avatar className="h-8 w-8">
                                                 <AvatarImage src={post.profiles?.avatar_url || undefined} />
-                                                <AvatarFallback>{post.profiles?.full_name?.charAt(0)}</AvatarFallback>
+                                                <AvatarFallback className="bg-gray-100 text-gray-700 font-semibold text-xs">
+                                                    {getInitials(post.profiles?.full_name as string)}
+                                                </AvatarFallback>
                                             </Avatar>
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center justify-between mb-1">
@@ -168,7 +171,7 @@ export function BookmarksPopover() {
                                                 <span className="text-lg font-bold text-gray-900">{format(new Date(event.start_time), 'd')}</span>
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <h4 className="font-bold text-sm mb-1 truncate group-hover:text-blue-600 transition-colors">
+                                                <h4 className="font-bold text-sm mb-1 truncate group-hover:text-gray-900 transition-colors">
                                                     {event.title}
                                                 </h4>
                                                 <div className="text-[11px] text-muted-foreground space-y-0.5">
@@ -177,7 +180,7 @@ export function BookmarksPopover() {
                                                         {format(new Date(event.start_time), 'HH:mm', { locale: tr })} - {format(new Date(event.end_time), 'HH:mm')}
                                                     </div>
                                                     {event.event_type === 'online_zoom' ? (
-                                                        <div className="flex items-center gap-1.5 text-blue-600">
+                                                        <div className="flex items-center gap-1.5 text-gray-900">
                                                             <Video className="w-3 h-3" />
                                                             Zoom
                                                         </div>

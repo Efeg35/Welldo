@@ -12,7 +12,7 @@ import { useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { Post, Channel } from "@/types";
-import { cn } from "@/lib/utils";
+import { cn, getInitials } from "@/lib/utils";
 import { Check } from "lucide-react";
 import {
     Dialog,
@@ -207,8 +207,10 @@ export function CreatePost({
                     <div className="bg-card border border-border rounded-xl p-4 transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer group">
                         <div className="flex gap-4 items-center">
                             <Avatar className="w-10 h-10">
-                                <AvatarImage src={user ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.id}` : undefined} />
-                                <AvatarFallback>U</AvatarFallback>
+                                <AvatarImage src={user?.avatar_url || undefined} />
+                                <AvatarFallback className="bg-gray-100 text-gray-700 font-semibold">
+                                    {getInitials(user?.full_name || user?.user_metadata?.full_name || user?.email || undefined)}
+                                </AvatarFallback>
                             </Avatar>
                             <div className="flex-1 bg-muted/50 rounded-full h-10 px-4 flex items-center text-muted-foreground group-hover:bg-muted transition-colors">
                                 Toplulukla bir şeyler paylaş...
@@ -268,7 +270,7 @@ export function CreatePost({
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="icon" className="hover:bg-muted/50 hover:text-foreground relative group">
-                                    <div className="rounded-full border border-muted-foreground/30 p-1 group-hover:border-primary group-hover:text-primary transition-colors">
+                                    <div className="rounded-full border border-muted-foreground/30 p-1 group-hover:border-gray-900 group-hover:text-gray-900 transition-colors">
                                         <Plus className="w-4 h-4" />
                                     </div>
                                 </Button>
@@ -368,7 +370,7 @@ export function CreatePost({
                                             size="sm"
                                             onClick={handleAddYoutubeLink}
                                             disabled={!youtubeLink}
-                                            className="h-8 bg-zinc-900 text-white hover:bg-zinc-800"
+                                            className="h-8 bg-gray-900 text-white hover:bg-black"
                                         >
                                             Ekle
                                         </Button>
@@ -450,7 +452,7 @@ export function CreatePost({
                         <Button
                             onClick={handleSubmit}
                             disabled={isPending || isUploading || (!content.trim() && !imageFile && !title.trim())}
-                            className="bg-zinc-900 text-white hover:bg-zinc-800 rounded-full px-6 py-2 font-medium"
+                            className="bg-gray-900 text-white hover:bg-black rounded-full px-6 py-2 font-medium"
                         >
                             {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : (post ? "Güncelle" : "Paylaş")}
                         </Button>

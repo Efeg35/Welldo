@@ -30,8 +30,7 @@ export function Header() {
                 <div className="flex items-center gap-8">
                     <Link href="/" className="flex items-center gap-2">
                         <div
-                            className="flex h-8 w-8 items-center justify-center rounded-lg"
-                            style={{ background: 'linear-gradient(135deg, #408FED 0%, #3E1BC9 100%)' }}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg bg-black shadow-sm"
                         >
                             <span className="text-sm font-bold text-white">W</span>
                         </div>

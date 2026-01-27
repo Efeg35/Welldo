@@ -818,7 +818,7 @@ export function EditEventModal({ isOpen, onClose, eventId, communityId, currentU
                                                                         <p className="text-xs text-gray-500 truncate">{user.email}</p>
                                                                     </div>
                                                                     <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                        <div className="h-7 w-7 flex items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                                                                        <div className="h-7 w-7 flex items-center justify-center rounded-full bg-gray-100 text-gray-700">
                                                                             <Plus className="w-4 h-4" />
                                                                         </div>
                                                                     </div>
@@ -927,7 +927,7 @@ export function EditEventModal({ isOpen, onClose, eventId, communityId, currentU
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
                                                         <Button variant="ghost" size="icon" className="hover:bg-muted/50 hover:text-foreground relative group h-8 w-8">
-                                                            <div className="rounded-full border border-muted-foreground/30 p-1 group-hover:border-primary group-hover:text-primary transition-colors">
+                                                            <div className="rounded-full border border-muted-foreground/30 p-1 group-hover:border-gray-900 group-hover:text-gray-900 transition-colors">
                                                                 <Plus className="w-3 h-3" />
                                                             </div>
                                                         </Button>
