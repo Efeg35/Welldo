@@ -538,45 +538,8 @@ export async function deleteEvent(eventId: string) {
     revalidatePath(`/community`);
 }
 
-export async function duplicateEvent(eventId: string) {
-    const supabase = await createClient();
-    const { data: original, error: fetchError } = await supabase
-        .from('events')
-        .select('*')
-        .eq('id', eventId)
-        .single();
 
-    if (fetchError || !original) {
-        throw new Error("Original event not found");
-    }
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error("Unauthorized");
-
-    // Remove immutable fields and prepare for insert
-    const { id, created_at, updated_at, ...rest } = original;
-
-    const newEvent = {
-        ...rest,
-        title: `${original.title} (Çoğaltılmış)`,
-        status: 'draft',
-        organizer_id: user.id
-    };
-
-    const { data: duplicated, error: insertError } = await supabase
-        .from('events')
-        .insert(newEvent)
-        .select()
-        .single();
-
-    if (insertError) {
-        console.error("Duplicate error:", insertError);
-        throw new Error(`Failed to duplicate event: ${insertError.message}`);
-    }
-
-    revalidatePath(`/community`);
-    return duplicated;
-}
 
 export async function toggleEventPin(eventId: string, isPinned: boolean) {
     const supabase = await createClient();
@@ -591,35 +554,7 @@ export async function toggleEventPin(eventId: string, isPinned: boolean) {
     revalidatePath(`/community`);
 }
 
-export async function toggleEventBookmark(eventId: string) {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) throw new Error("Koleksiyona eklemek için giriş yapmalısınız.");
-
-    const { data: existing } = await supabase
-        .from('bookmarks')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('event_id', eventId)
-        .single();
-
-    if (existing) {
-        await supabase
-            .from('bookmarks')
-            .delete()
-            .eq('id', existing?.id);
-    } else {
-        await supabase
-            .from('bookmarks')
-            .insert({
-                user_id: user.id,
-                event_id: eventId
-            });
-    }
-
-    revalidatePath(`/community`);
-}
+export const pinEventToSpace = toggleEventPin;  // Alias to support context menu component usage
 
 // EMail Schedule
 export async function createEmailSchedule(data: {
@@ -684,3 +619,201 @@ export async function deleteEmailSchedule(scheduleId: string) {
         throw new Error(`Failed to delete email schedule: ${error.message}`);
     }
 }
+
+
+
+export async function duplicateEvent(eventId: string) {
+    const supabase = await createClient();
+    const { data: original, error: fetchError } = await supabase
+        .from('events')
+        .select('*')
+        .eq('id', eventId)
+        .single();
+
+    if (fetchError || !original) {
+        throw new Error("Original event not found");
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Unauthorized");
+
+    // Remove immutable fields and prepare for insert
+    const { id, created_at, updated_at, ...rest } = original;
+
+    const newEvent = {
+        ...rest,
+        title: `${original.title} (Çoğaltılmış)`,
+        status: 'draft',
+        organizer_id: user.id
+    };
+
+    const { data: duplicated, error: insertError } = await supabase
+        .from('events')
+        .insert(newEvent)
+        .select()
+        .single();
+
+    if (insertError) {
+        console.error("Duplicate error:", insertError);
+        throw new Error(`Failed to duplicate event: ${insertError.message}`);
+    }
+
+    revalidatePath(`/community`);
+    return duplicated;
+}
+
+
+export async function toggleEventBookmark(eventId: string) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Unauthorized");
+
+    // Check existing
+    const { data: existing } = await supabase
+        .from('bookmarks')
+        .select('*')
+        .eq('event_id', eventId)
+        .eq('user_id', user.id)
+        .single();
+
+    if (existing) {
+        await supabase.from('bookmarks').delete().eq('id', existing.id);
+    } else {
+        await supabase.from('bookmarks').insert({ event_id: eventId, user_id: user.id });
+    }
+    revalidatePath('/community');
+}
+
+/**
+ * Get events for the Events Hub page with optional type filtering.
+ * Returns all published events for the given month range or all future events.
+ */
+export async function getEventsForHub(options?: {
+    typeFilter?: 'all' | 'physical' | 'online';
+    startDate?: string;
+    endDate?: string;
+}) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    let query = supabase
+        .from('events')
+        .select(`
+            *,
+            community:communities(id, name, slug),
+            channel:channels(id, name, slug),
+            responses:event_responses(
+                user_id,
+                status,
+                checked_in_at,
+                user:profiles(id, full_name, avatar_url)
+            ),
+            tickets:tickets(user_id),
+            bookmarks(user_id)
+        `)
+        .eq('status', 'published')
+        .order('start_time', { ascending: true });
+
+    // Type filter
+    if (options?.typeFilter === 'physical') {
+        query = query.eq('event_type', 'physical');
+    } else if (options?.typeFilter === 'online') {
+        query = query.in('event_type', ['online_zoom', 'online']);
+    }
+
+    // Date range filter
+    if (options?.startDate) {
+        query = query.gte('start_time', options.startDate);
+    }
+    if (options?.endDate) {
+        query = query.lte('start_time', options.endDate);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+        console.error("Error fetching events for hub:", error);
+        return [];
+    }
+
+    return data || [];
+}
+
+/**
+ * Check in an attendee at the door.
+ * Only organizers/admins can perform this action.
+ */
+export async function checkInAttendee(eventId: string, attendeeUserId: string) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) throw new Error("Unauthorized");
+
+    // Check if user is organizer or admin
+    const { data: event } = await supabase
+        .from('events')
+        .select('organizer_id')
+        .eq('id', eventId)
+        .single();
+
+    if (!event) throw new Error("Event not found");
+
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+    const isAdmin = profile?.role === 'admin' || profile?.role === 'instructor';
+    const isOrganizer = event.organizer_id === user.id;
+
+    if (!isAdmin && !isOrganizer) {
+        throw new Error("Unauthorized: Only organizers can check in attendees");
+    }
+
+    // Update check-in timestamp
+    const { error } = await supabase
+        .from('event_responses')
+        .update({ checked_in_at: new Date().toISOString() })
+        .eq('event_id', eventId)
+        .eq('user_id', attendeeUserId);
+
+    if (error) {
+        console.error("Error checking in attendee:", error);
+        throw new Error("Failed to check in attendee");
+    }
+
+    revalidatePath(`/events/${eventId}/attendees`);
+}
+
+/**
+ * Get attendees for an event with check-in status.
+ * Only organizers/admins can access this.
+ */
+export async function getEventAttendeesWithCheckIn(eventId: string) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) throw new Error("Unauthorized");
+
+    const { data, error } = await supabase
+        .from('event_responses')
+        .select(`
+            user_id,
+            status,
+            checked_in_at,
+            created_at,
+            user:profiles(id, full_name, avatar_url, email)
+        `)
+        .eq('event_id', eventId)
+        .eq('status', 'attending')
+        .order('created_at', { ascending: true });
+
+    if (error) {
+        console.error("Error fetching attendees:", error);
+        return [];
+    }
+
+    return data || [];
+}
+

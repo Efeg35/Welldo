@@ -130,6 +130,7 @@ export interface Event {
         permissions?: { comments_disabled?: boolean; hide_attendees?: boolean };
         attendees?: { rsvp_limit?: number | null; allow_guests?: boolean };
         seo?: { meta_title?: string | null; meta_description?: string | null; og_image_url?: string | null };
+        feed?: { hide_likes?: boolean }; // Added for Scenario B logic if applied to events
     };
 }
 
@@ -165,6 +166,14 @@ export interface Post {
     profiles?: Profile;
     channel?: Channel;
     community?: Community;
+    // New fields for context menu
+    is_pinned?: boolean;
+    settings?: {
+        hide_likes?: boolean;
+        hide_comments?: boolean;
+        comments_closed?: boolean;
+        is_following?: boolean; // Virtual field for UI
+    };
 }
 
 export interface Ticket {

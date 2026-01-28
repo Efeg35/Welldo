@@ -12,14 +12,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import Markdown from 'react-markdown';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Edit, Trash, Share2 as ShareIcon } from "lucide-react";
-import { CreatePost } from "@/components/community/create-post";
+import { PostContextMenu } from "./post-context-menu";
 import { Profile } from "@/types";
 
 import { Post } from "@/types";
@@ -177,33 +170,12 @@ export function PostCard({ post, currentUserId, onClick }: PostCardProps) {
                     >
                         <Bookmark className={cn("w-4 h-4", isBookmarked && "fill-current")} />
                     </Button>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                            <Button variant="ghost" size="icon" className="rounded-full hover:bg-muted/50 h-8 w-8">
-                                <MoreHorizontal className="w-5 h-5" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48">
-                            {canManage && (
-                                <>
-                                    <CreatePost user={{ id: currentUserId }} post={post}>
-                                        <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="cursor-pointer">
-                                            <Edit className="w-4 h-4 mr-2" />
-                                            Düzenle
-                                        </DropdownMenuItem>
-                                    </CreatePost>
-                                    <DropdownMenuItem onClick={handleDeleteClick} className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50">
-                                        <Trash className="w-4 h-4 mr-2" />
-                                        Sil
-                                    </DropdownMenuItem>
-                                </>
-                            )}
-                            <DropdownMenuItem onClick={handleShare} className="cursor-pointer">
-                                <ShareIcon className="w-4 h-4 mr-2" />
-                                Paylaş
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                    <PostContextMenu
+                        post={post}
+                        currentUserId={currentUserId}
+                        isOwner={canManage}
+                        isAdmin={post.profiles?.role === 'admin'} // Simplified admin check
+                    />
                 </div>
             </div>
 

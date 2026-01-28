@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ThumbsUp, MessageCircle, Share2, Send, Bookmark, MoreHorizontal, Image as ImageIcon, Smile, Paperclip, Mic, Video, Plus } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
-import { useState, useTransition, useOptimistic } from "react";
+import { useState, useTransition, useOptimistic, useEffect } from "react";
 import { createComment, toggleLike } from "@/actions/community";
 import { cn, getInitials } from "@/lib/utils";
 import { Post, Profile } from "@/types";
@@ -27,6 +27,13 @@ export function PostContent({ post: initialPost, user }: PostContentProps) {
     const [comment, setComment] = useState("");
     const [isPending, startTransition] = useTransition();
     const [post, setPost] = useState(initialPost);
+
+    // Sync with prop updates
+    useEffect(() => {
+        setPost(initialPost);
+    }, [initialPost]);
+
+
 
     const hasLiked = post.likes?.some((like: any) => like.user_id === user.id) || false;
     const initialLikeCount = post._count?.likes || 0;
@@ -52,10 +59,22 @@ export function PostContent({ post: initialPost, user }: PostContentProps) {
 
         startTransition(async () => {
             try {
-                await createComment(post.id, comment);
+                // Optimistic update can be tricky with full profile data, 
+                // so we wait for server response which is fast enough usually.
+                // Or we can construct a pessimistic update immediately after await.
+                const newComment = await createComment(post.id, comment);
+
                 setComment("");
+
+                if (newComment) {
+                    // Update local state to show comment immediately
+                    setPost((prev: any) => ({
+                        ...prev,
+                        comments: [...(prev.comments || []), newComment]
+                    }));
+                }
+
                 toast.success("Yorum eklendi");
-                // In a real app we'd update local state or revalidate
             } catch (error) {
                 toast.error("Yorum eklenemedi");
             }
@@ -138,91 +157,127 @@ export function PostContent({ post: initialPost, user }: PostContentProps) {
                 {/* Comments List */}
                 <div className="space-y-6">
                     {(post.comments || []).map((c: any) => (
-                        <div key={c.id} className="flex gap-4 group">
-                            <Avatar className="w-10 h-10 shrink-0">
+                        <div key={c.id} className="flex gap-4 group animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <Avatar className="w-10 h-10 shrink-0 border border-gray-100">
                                 <AvatarImage src={c.profiles?.avatar_url} />
-                                <AvatarFallback className="bg-gray-100 text-gray-700 font-semibold text-sm">
+                                <AvatarFallback className="bg-white text-gray-700 font-semibold text-sm">
                                     {getInitials(c.profiles?.full_name as string)}
                                 </AvatarFallback>
                             </Avatar>
-                            <div className="flex-1 space-y-1">
-                                <div className="flex items-center gap-2">
-                                    <span className="font-bold text-gray-900">{c.profiles?.full_name}</span>
-                                    {c.profiles?.role === 'instructor' && (
-                                        <span className="bg-gray-200 text-gray-700 text-[10px] px-1.5 py-0.5 rounded-full font-bold">MOD</span>
-                                    )}
-                                    <span className="text-xs text-muted-foreground">
-                                        {c.created_at && !isNaN(new Date(c.created_at).getTime())
+                            <div className="flex-1 space-y-1.5 min-w-0">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-semibold text-sm text-gray-900">{c.profiles?.full_name}</span>
+                                        {c.profiles?.role === 'instructor' && (
+                                            <span className="bg-indigo-100 text-indigo-700 text-[10px] px-1.5 py-0.5 rounded-full font-bold uppercase">Eğitmen</span>
+                                        )}
+                                        <span className="text-xs text-muted-foreground"> • {c.created_at && !isNaN(new Date(c.created_at).getTime())
                                             ? formatDistanceToNow(new Date(c.created_at), { addSuffix: true, locale: tr })
-                                            : 'yakın zamanda'
-                                        }
-                                    </span>
+                                            : 'şimdi'
+                                        }</span>
+                                    </div>
+
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="h-6 w-6 text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <MoreHorizontal className="w-4 h-4" />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="w-48">
+                                            <DropdownMenuItem className="gap-2">
+                                                <Bookmark className="w-4 h-4" /> Yorumu kaydet
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem className="gap-2">
+                                                <MessageCircle className="w-4 h-4" /> Yorumu düzenle
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem className="gap-2" onClick={() => {
+                                                navigator.clipboard.writeText(`${window.location.href}#comment-${c.id}`);
+                                                toast.success("Link kopyalandı");
+                                            }}>
+                                                <Share2 className="w-4 h-4" /> Linki kopyala
+                                            </DropdownMenuItem>
+                                            {user.id === c.user_id && (
+                                                <DropdownMenuItem className="gap-2 text-red-600 focus:text-red-600 focus:bg-red-50">
+                                                    <span className="flex items-center gap-2 w-full">
+                                                        {/* Trash icon would be better but keeping simple */}
+                                                        Yorumu sil
+                                                    </span>
+                                                </DropdownMenuItem>
+                                            )}
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
                                 </div>
-                                <div className="text-gray-800 leading-relaxed">
+
+                                <div className="text-gray-800 text-sm leading-relaxed whitespace-pre-wrap">
                                     {c.content}
                                 </div>
+
                                 <div className="flex items-center gap-4 pt-1">
-                                    <button className="text-xs font-semibold text-gray-500 hover:text-gray-800">Like</button>
-                                    <button className="text-xs font-semibold text-gray-500 hover:text-gray-800">Reply</button>
-                                    <button className="opacity-0 group-hover:opacity-100 transition-opacity ml-auto text-gray-400 hover:text-gray-600">
-                                        <MoreHorizontal className="w-4 h-4" />
-                                    </button>
+                                    <button className="text-xs font-semibold text-gray-500 hover:text-gray-900 transition-colors">Beğen</button>
+                                    <button className="text-xs font-semibold text-gray-500 hover:text-gray-900 transition-colors">Yanıtla</button>
                                 </div>
                             </div>
                         </div>
                     ))}
                     {post.comments?.length === 0 && (
-                        <div className="text-center py-12 text-muted-foreground bg-white border border-dashed rounded-xl">
-                            Henüz yorum yapılmamış. İlk yorumu sen yap!
+                        <div className="text-center py-12">
+                            <div className="bg-white p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3 shadow-sm border border-gray-100">
+                                <MessageCircle className="w-6 h-6 text-gray-300" />
+                            </div>
+                            <h3 className="text-gray-900 font-medium mb-1">Henüz yorum yok</h3>
+                            <p className="text-gray-500 text-sm">Bu gönderiye ilk yorumu sen yap!</p>
                         </div>
                     )}
                 </div>
 
-                {/* Comment Form - Enhanced Styles at the bottom */}
+                {/* Comment Form - Clean & Minimal */}
                 <div className="flex gap-4 border-t border-gray-100 pt-8">
-                    <Avatar className="w-10 h-10 shrink-0">
+                    <Avatar className="w-10 h-10 shrink-0 border border-gray-100">
                         <AvatarImage src={user.avatar_url || ""} />
-                        <AvatarFallback className="bg-gray-100 text-gray-700 font-semibold text-sm">
+                        <AvatarFallback className="bg-white text-gray-700 font-semibold text-sm">
                             {getInitials(user.full_name as string)}
                         </AvatarFallback>
                     </Avatar>
                     <div className="flex-1">
-                        <div className="bg-white border focus-within:ring-1 focus-within:ring-gray-300 border-gray-200 rounded-xl shadow-sm overflow-hidden transition-all">
-                            <textarea
-                                value={comment}
-                                onChange={(e) => setComment(e.target.value)}
-                                placeholder="Düşüncelerini paylaş..."
-                                className="w-full bg-transparent border-none p-4 min-h-[60px] resize-none outline-none text-base placeholder:text-gray-400"
-                            />
-                            {/* Toolbar */}
-                            <div className="flex items-center justify-between px-2 pb-2">
-                                <div className="flex items-center gap-1">
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-gray-600 rounded-full">
-                                        <Plus className="w-5 h-5" />
-                                    </Button>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-gray-600 rounded-full">
-                                        <Smile className="w-5 h-5" />
-                                    </Button>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-gray-600 rounded-full">
-                                        <Paperclip className="w-4 h-4" />
-                                    </Button>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-gray-600 rounded-full">
-                                        <ImageIcon className="w-4 h-4" />
-                                    </Button>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-gray-600 rounded-full">
-                                        <Video className="w-4 h-4" />
-                                    </Button>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-gray-600 rounded-full">
-                                        <Mic className="w-4 h-4" />
+                        <div className="relative">
+                            <div className={cn(
+                                "bg-white border rounded-xl shadow-sm overflow-hidden transition-all duration-200",
+                                "focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500",
+                                "border-gray-200"
+                            )}>
+                                <textarea
+                                    value={comment}
+                                    onChange={(e) => setComment(e.target.value)}
+                                    placeholder="Düşüncelerini paylaş..."
+                                    className="w-full bg-transparent border-none p-4 min-h-[50px] max-h-[200px] resize-y outline-none text-sm placeholder:text-gray-400"
+                                    rows={1}
+                                    style={{ minHeight: '50px' }}
+                                    onInput={(e) => {
+                                        const target = e.target as HTMLTextAreaElement;
+                                        target.style.height = 'auto';
+                                        target.style.height = target.scrollHeight + 'px';
+                                    }}
+                                />
+                                <div className="flex items-center justify-between px-2 pb-2 bg-white">
+                                    <div className="flex items-center gap-1">
+                                        {/* Minimal attachment icons only */}
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-full">
+                                            <ImageIcon className="w-4 h-4" />
+                                        </Button>
+                                    </div>
+                                    <Button
+                                        onClick={handleComment}
+                                        disabled={!comment.trim() || isPending}
+                                        className={cn(
+                                            "rounded-full px-4 h-8 text-xs font-semibold transition-all",
+                                            comment.trim()
+                                                ? "bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
+                                                : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                                        )}
+                                    >
+                                        {isPending ? 'Gönderiliyor...' : 'Paylaş'}
                                     </Button>
                                 </div>
-                                <Button
-                                    onClick={handleComment}
-                                    disabled={!comment.trim() || isPending}
-                                    className="bg-gray-200 hover:bg-gray-300 text-gray-600 hover:text-gray-900 rounded-full px-6 h-8 text-sm font-medium transition-colors"
-                                >
-                                    Paylaş
-                                </Button>
                             </div>
                         </div>
                     </div>
