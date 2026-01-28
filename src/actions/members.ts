@@ -13,6 +13,8 @@ export interface Member {
     location?: string;
     bio?: string;
     activity_score?: number;
+    is_online?: boolean;
+    last_seen_at?: string;
 }
 
 export interface MemberFilters {
@@ -23,7 +25,9 @@ export interface MemberFilters {
     location?: string;
     activityScore?: 'high' | 'medium' | 'low' | 'all';
     status?: 'active' | 'all';
+    onlineStatus?: 'online' | 'offline' | 'all';
     spaceAccess?: string;
+    upcomingEventId?: string;
 }
 
 export async function getMembers(
@@ -47,7 +51,8 @@ export async function getMembers(
                 avatar_url,
                 role,
                 email,
-                bio
+                bio,
+                last_seen_at
             )
         `, { count: 'exact' })
         .eq("community_id", communityId);
@@ -66,6 +71,33 @@ export async function getMembers(
             query = query.in("user_id", authorizedUserIds);
         } else {
             // No members in this channel, return empty result
+            return { members: [], total: 0 };
+        }
+    }
+
+    // Filter by Upcoming Event (RSVP/Ticket)
+    if (filters.upcomingEventId) {
+        // Get users who have tickets OR have RSVP'd 'attending'
+        const { data: ticketHolders } = await supabase
+            .from("tickets")
+            .select("user_id")
+            .eq("event_id", filters.upcomingEventId);
+
+        const { data: rsvpAttendees } = await supabase
+            .from("event_responses")
+            .select("user_id")
+            .eq("event_id", filters.upcomingEventId)
+            .eq("status", "attending");
+
+        const ticketUserIds = (ticketHolders || []).map(t => t.user_id);
+        const rsvpUserIds = (rsvpAttendees || []).map(r => r.user_id);
+
+        // Combine unique user IDs
+        const eventUserIds = [...new Set([...ticketUserIds, ...rsvpUserIds])];
+
+        if (eventUserIds.length > 0) {
+            query = query.in("user_id", eventUserIds);
+        } else {
             return { members: [], total: 0 };
         }
     }
@@ -107,16 +139,23 @@ export async function getMembers(
     }
 
     // Transform Data
-    let members: Member[] = (data || []).map((item: any) => ({
-        id: item.profiles?.id || item.user_id,
-        full_name: item.profiles?.full_name || "Unknown User",
-        avatar_url: item.profiles?.avatar_url,
-        email: item.profiles?.email,
-        role: item.profiles?.role || "member",
-        joined_at: item.created_at,
-        bio: item.profiles?.bio,
-        activity_score: gamificationMap[item.profiles?.id || item.user_id] || 0
-    }));
+    let members: Member[] = (data || []).map((item: any) => {
+        const lastSeen = item.profiles?.last_seen_at;
+        const isOnline = lastSeen ? (new Date().getTime() - new Date(lastSeen).getTime() < 5 * 60 * 1000) : false;
+
+        return {
+            id: item.profiles?.id || item.user_id,
+            full_name: item.profiles?.full_name || "Unknown User",
+            avatar_url: item.profiles?.avatar_url,
+            email: item.profiles?.email,
+            role: item.profiles?.role || "member",
+            joined_at: item.created_at,
+            bio: item.profiles?.bio,
+            activity_score: gamificationMap[item.profiles?.id || item.user_id] || 0,
+            last_seen_at: lastSeen,
+            is_online: isOnline
+        };
+    });
 
     // Apply In-Memory Filters
     // Search filter (name or email)
@@ -162,6 +201,15 @@ export async function getMembers(
         });
     }
 
+    // Online Status filter
+    if (filters.onlineStatus && filters.onlineStatus !== 'all') {
+        members = members.filter(m => {
+            if (filters.onlineStatus === 'online') return m.is_online;
+            if (filters.onlineStatus === 'offline') return !m.is_online;
+            return true;
+        });
+    }
+
     return {
         members,
         total: count || members.length
@@ -189,5 +237,24 @@ export async function getSpacesForFilter(communityId: string) {
         id: channel.id,
         name: channel.name,
         type: channel.type
+    }));
+}
+
+// Get upcoming events for filtering
+export async function getUpcomingEvents(communityId: string) {
+    const supabase = await createClient();
+
+    const { data } = await supabase
+        .from("events")
+        .select("id, title, start_time")
+        .eq("community_id", communityId)
+        .gt("start_time", new Date().toISOString())
+        .order("start_time", { ascending: true })
+        .limit(10); // Limit to next 10 events for UI sanity
+
+    return (data || []).map(event => ({
+        id: event.id,
+        title: event.title,
+        start_time: event.start_time
     }));
 }

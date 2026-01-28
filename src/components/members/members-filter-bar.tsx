@@ -16,7 +16,8 @@ import {
     Tag,
     Calendar,
     Trophy,
-    X
+    X,
+    Activity
 } from "lucide-react";
 
 export interface ActiveFilter {
@@ -31,6 +32,9 @@ interface MembersFilterBarProps {
     onAddFilter: (filter: ActiveFilter) => void;
     onRemoveFilter: (filterId: string) => void;
     availableSpaces?: { id: string; name: string }[];
+    upcomingEvents?: { id: string; title: string; start_time: string }[];
+    onNearMeClick?: () => void;
+    isNearMeActive?: boolean;
 }
 
 interface FilterDefinition {
@@ -61,17 +65,21 @@ const baseFilterDefinitions: FilterDefinition[] = [
         type: "select",
         options: [] // To be populated dynamically
     },
-    { id: "tag", label: "Etiket", icon: Tag, type: "text" },
-    { id: "rsvp", label: "Etkinlik LCV", icon: Calendar, type: "text" },
     {
-        id: "score",
-        label: "Aktivite puanı",
-        icon: Trophy,
+        id: "rsvp",
+        label: "Etkinlik",
+        icon: Calendar,
+        type: "select",
+        options: [] // To be populated dynamically
+    },
+    {
+        id: "status",
+        label: "Durum",
+        icon: Activity,
         type: "select",
         options: [
-            { value: "high", label: "Yüksek (8+)" },
-            { value: "medium", label: "Orta (4-7)" },
-            { value: "low", label: "Düşük (0-3)" },
+            { value: "online", label: "Çevrimiçi" },
+            { value: "offline", label: "Çevrimdışı" },
         ]
     },
     { id: "location", label: "Konum", icon: MapPin, type: "text" },
@@ -112,7 +120,7 @@ function FilterPopover({
                                 placeholder={`${filter.label} girin...`}
                                 value={inputValue}
                                 onChange={(e) => setInputValue(e.target.value)}
-                                className="h-9"
+                                className="h-9 focus-visible:ring-0 focus-visible:border-gray-400"
                                 onKeyDown={(e) => {
                                     if (e.key === "Enter" && inputValue.trim()) {
                                         handleApply(inputValue);
@@ -121,7 +129,7 @@ function FilterPopover({
                             />
                             <Button
                                 size="sm"
-                                className="w-full"
+                                className="w-full bg-black text-white hover:bg-black/90"
                                 onClick={() => handleApply(inputValue)}
                                 disabled={!inputValue.trim()}
                             >
@@ -135,7 +143,7 @@ function FilterPopover({
                             {filter.options.map((option) => (
                                 <button
                                     key={option.value}
-                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-gray-100 text-left"
+                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors hover:bg-black hover:text-white text-left text-gray-700"
                                     onClick={() => handleApply(option.value, option.label)}
                                 >
                                     <span className="truncate">{option.label}</span>
@@ -149,7 +157,7 @@ function FilterPopover({
     );
 }
 
-export function MembersFilterBar({ activeFilters, onAddFilter, onRemoveFilter, availableSpaces = [] }: MembersFilterBarProps) {
+export function MembersFilterBar({ activeFilters, onAddFilter, onRemoveFilter, availableSpaces = [], upcomingEvents = [], onNearMeClick, isNearMeActive }: MembersFilterBarProps) {
     const [addFilterOpen, setAddFilterOpen] = useState(false);
 
     // Create dynamic filters with current available spaces
@@ -161,13 +169,23 @@ export function MembersFilterBar({ activeFilters, onAddFilter, onRemoveFilter, a
                     options: availableSpaces.map(s => ({ value: s.id, label: s.name }))
                 };
             }
+            if (def.id === 'rsvp') {
+                return {
+                    ...def,
+                    options: upcomingEvents.map(e => ({
+                        value: e.id,
+                        label: `${new Date(e.start_time).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' })} - ${e.title}`
+                    }))
+                };
+            }
             return def;
         });
-    }, [availableSpaces]);
+    }, [availableSpaces, upcomingEvents]);
 
-    // Get filters that are not yet active
+    // Get filters that are not yet active AND not shown as quick buttons
+    // Since we are showing all filters as quick buttons, this will be empty effectively unless more are added
     const availableFiltersList = filters.filter(
-        f => !activeFilters.some(af => af.id === f.id)
+        f => !activeFilters.some(af => af.id === f.id) && false // Hide from dropdown as they are all buttons now
     );
 
     const handleAddFilter = (filter: FilterDefinition, value: string, displayValue: string) => {
@@ -181,6 +199,20 @@ export function MembersFilterBar({ activeFilters, onAddFilter, onRemoveFilter, a
 
     return (
         <div className="flex items-center gap-2 overflow-x-auto py-2 scrollbar-hide">
+            {/* Near Me Button */}
+            <Button
+                variant="outline"
+                size="sm"
+                className={`rounded-full gap-2 h-8 px-4 font-normal shadow-sm shrink-0 transition-colors ${isNearMeActive
+                    ? "bg-gray-900 text-white hover:bg-gray-800 border-gray-900"
+                    : "bg-white text-gray-600 hover:text-gray-900 hover:bg-gray-50 border-gray-200"
+                    }`}
+                onClick={onNearMeClick}
+            >
+                <MapPin className={`w-3.5 h-3.5 ${isNearMeActive ? "opacity-100" : "opacity-70"}`} />
+                Yakınımdakiler
+            </Button>
+
             {/* Active Filters */}
             {activeFilters.map((filter) => (
                 <div
@@ -197,8 +229,8 @@ export function MembersFilterBar({ activeFilters, onAddFilter, onRemoveFilter, a
                 </div>
             ))}
 
-            {/* Available Filter Buttons */}
-            {filters.slice(0, 4).map((filter) => {
+            {/* Available Filter Buttons - Show all filters directly */}
+            {filters.map((filter) => {
                 const isActive = activeFilters.some(af => af.id === filter.id);
                 if (isActive) return null;
 

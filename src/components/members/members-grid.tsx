@@ -55,12 +55,17 @@ export function MembersGrid({ members, isLoading, onMemberClick, onAddMember }: 
                     className="flex flex-col items-center text-center bg-white border border-border rounded-xl p-6 hover:shadow-md transition-all cursor-pointer group"
                     onClick={() => onMemberClick?.(member)}
                 >
-                    <Avatar className="w-20 h-20 mb-4 border-2 border-gray-100 group-hover:border-gray-200 transition-colors">
-                        <AvatarImage src={member.avatar_url || ""} />
-                        <AvatarFallback className="text-lg bg-gray-100 text-gray-500">
-                            {getInitials(member.full_name || "U")}
-                        </AvatarFallback>
-                    </Avatar>
+                    <div className="relative mb-4">
+                        <Avatar className="w-20 h-20 border-2 border-gray-100 group-hover:border-gray-200 transition-colors">
+                            <AvatarImage src={member.avatar_url || ""} />
+                            <AvatarFallback className="text-lg bg-gray-100 text-gray-500">
+                                {getInitials(member.full_name || "U")}
+                            </AvatarFallback>
+                        </Avatar>
+                        {member.is_online && (
+                            <span className="absolute bottom-1 right-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full shadow-sm" title="Çevrimiçi" />
+                        )}
+                    </div>
 
                     <h3 className="font-semibold text-lg truncate w-full" title={member.full_name || ""}>
                         {member.full_name || "İsimsiz Üye"}

@@ -10,8 +10,31 @@ export default async function DashboardPageLayout({
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
-    // Fetch dynamic sidebar data
-    const { spaces, links, groups } = await getSidebarData();
+    // Fetch community ID first
+    let communityId = "";
+    if (user) {
+        const { data: membership } = await supabase
+            .from("memberships")
+            .select("community_id")
+            .eq("user_id", user.id)
+            .limit(1)
+            .single();
+
+        if (membership) {
+            communityId = membership.community_id;
+        } else {
+            const { data: ownedCommunity } = await supabase
+                .from('communities')
+                .select('id')
+                .eq('owner_id', user.id)
+                .limit(1)
+                .single();
+            if (ownedCommunity) communityId = ownedCommunity.id;
+        }
+    }
+
+    // Fetch dynamic sidebar data with communityId
+    const { spaces, links, groups } = await getSidebarData(communityId);
 
     // Fetch user profile role and onboarding status
     let userRole = "member";
