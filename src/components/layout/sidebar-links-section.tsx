@@ -34,15 +34,9 @@ export function SidebarLinksSection({ communityId, canEdit, initialLinks = [] }:
     const [editingLink, setEditingLink] = useState<LinkItem | null>(null);
     const supabase = createClient();
 
-    // Sync state with props when server refetches (revalidatePath)
-    useEffect(() => {
-        if (initialLinks.length > 0) {
-            setLinks(initialLinks);
-        }
-        // If initialLinks is empty, we might still want to fetch or just trust it.
-        // Actually, for better UX, if communityId changes, we should 
-        // probably trust the server provided initialLinks.
-    }, [initialLinks]);
+    // We initialize state with initialLinks. 
+    // We avoid a useEffect here to prevent infinite loops if the parent passes a new array reference on every render.
+    // If communityId changes, the parent should change the key of this component to reset state.
 
     // Initial Fetch (as fallback or if not provided)
     useEffect(() => {

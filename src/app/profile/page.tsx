@@ -148,7 +148,7 @@ export default function ProfilePage() {
 
             {/* Footer */}
             <div className="text-center text-xs text-muted-foreground">
-                <p>Üyelik: {new Date(profile?.created_at || Date.now()).toLocaleDateString("tr-TR")}</p>
+                <p>Üyelik: {profile?.created_at ? new Date(profile.created_at).toLocaleDateString("tr-TR") : "-"}</p>
                 <p className="mt-1">WellDo v1.0.0</p>
             </div>
         </div>

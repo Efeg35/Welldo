@@ -306,8 +306,7 @@ export function Sidebar({
         // 4. Sort Groups
         let sorted = Object.values(groupsMap).sort((a, b) => a.position - b.position);
 
-        // Filter out empty ungrouped section (since we migrated to real groups, 
-        // or just want to confirm it's not shown if empty)
+        // Filter out empty ungrouped section
         sorted = sorted.filter(g => g.id !== 'ungrouped' || g.spaces.length > 0);
 
         // Sort spaces within groups
@@ -315,7 +314,14 @@ export function Sidebar({
             g.spaces.sort((a, b) => (a.position || 0) - (b.position || 0));
         });
 
-        setOrderedGroups(sorted);
+        // Only update state if meaningful changes occurred to prevent infinite loops
+        // We use a simple JSON stringify comparison here as it's safe enough for this data size
+        setOrderedGroups(prev => {
+            if (JSON.stringify(prev) !== JSON.stringify(sorted)) {
+                return sorted;
+            }
+            return prev;
+        });
     }, [groups, filteredSpaces]);
 
     const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
@@ -612,6 +618,7 @@ export function Sidebar({
                 </div>
 
                 <SidebarLinksSection
+                    key={JSON.stringify(links)}
                     communityId={spaces?.[0]?.community_id || ""}
                     canEdit={canCreateSpace || false}
                     initialLinks={links}

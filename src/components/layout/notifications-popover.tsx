@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Bell, Check, Archive, Settings, MoreHorizontal } from "lucide-react";
 import {
     Popover,
@@ -34,16 +34,16 @@ export function NotificationsPopover() {
     const [activeTab, setActiveTab] = useState("inbox");
     const supabase = createClient();
 
-    const fetchNotifications = async () => {
+    const fetchNotifications = useCallback(async () => {
         const data = await getNotifications(activeTab as any);
         setNotifications(data);
         const count = await getUnreadCount();
         setUnreadCount(count);
-    };
+    }, [activeTab]);
 
     useEffect(() => {
         fetchNotifications();
-    }, [activeTab]);
+    }, [fetchNotifications]);
 
     useEffect(() => {
         const setupRealtime = async () => {

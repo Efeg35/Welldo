@@ -81,7 +81,9 @@ export function EventActions({
                 // Execute iyzico scripts
                 const scripts = checkoutDiv.getElementsByTagName("script");
                 for (let i = 0; i < scripts.length; i++) {
-                    eval(scripts[i].innerText);
+                    const script = document.createElement("script");
+                    script.text = scripts[i].innerText;
+                    document.body.appendChild(script);
                 }
             } else if (data.error) {
                 alert(data.error);

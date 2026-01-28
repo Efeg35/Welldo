@@ -78,7 +78,9 @@ export function EventDetailPanel({
                 document.body.appendChild(checkoutDiv);
                 const scripts = checkoutDiv.getElementsByTagName("script");
                 for (let i = 0; i < scripts.length; i++) {
-                    eval(scripts[i].innerText);
+                    const script = document.createElement("script");
+                    script.text = scripts[i].innerText;
+                    document.body.appendChild(script);
                 }
             }
         } catch (error) {
