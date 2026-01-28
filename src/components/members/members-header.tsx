@@ -1,29 +1,45 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { LayoutGrid, List, Search } from "lucide-react";
+import { LayoutGrid, List, Search, MoreHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface MembersHeaderProps {
     viewMode: "grid" | "list";
     onChangeViewMode: (mode: "grid" | "list") => void;
     onSearch: (query: string) => void;
     isAdmin: boolean;
+    onAddMember?: () => void;
+    onManage?: () => void;
 }
 
-export function MembersHeader({ viewMode, onChangeViewMode, onSearch, isAdmin }: MembersHeaderProps) {
+export function MembersHeader({
+    viewMode,
+    onChangeViewMode,
+    onSearch,
+    isAdmin,
+    onAddMember,
+    onManage
+}: MembersHeaderProps) {
     return (
         <div className="flex flex-col gap-3 mb-2">
             <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-bold tracking-tight">Üyeler</h1>
 
                 <div className="flex items-center gap-2">
+                    {/* View Toggle */}
                     <div className="flex items-center bg-muted/50 rounded-lg p-1 border border-border">
                         <button
                             onClick={() => onChangeViewMode("grid")}
                             className={`p-2 rounded-md transition-all ${viewMode === "grid"
-                                ? "bg-white shadow-sm text-foreground"
-                                : "text-muted-foreground hover:text-foreground"
+                                    ? "bg-white shadow-sm text-foreground"
+                                    : "text-muted-foreground hover:text-foreground"
                                 }`}
                             title="Grid View"
                         >
@@ -32,8 +48,8 @@ export function MembersHeader({ viewMode, onChangeViewMode, onSearch, isAdmin }:
                         <button
                             onClick={() => onChangeViewMode("list")}
                             className={`p-2 rounded-md transition-all ${viewMode === "list"
-                                ? "bg-white shadow-sm text-foreground"
-                                : "text-muted-foreground hover:text-foreground"
+                                    ? "bg-white shadow-sm text-foreground"
+                                    : "text-muted-foreground hover:text-foreground"
                                 }`}
                             title="List View"
                         >
@@ -44,9 +60,31 @@ export function MembersHeader({ viewMode, onChangeViewMode, onSearch, isAdmin }:
                     {isAdmin && (
                         <div className="flex items-center gap-2 ml-2">
                             <Button variant="outline">Public</Button>
-                            <Button variant="default" className="bg-black text-white hover:bg-black/90">
+                            <Button
+                                variant="default"
+                                className="bg-black text-white hover:bg-black/90"
+                                onClick={onManage}
+                            >
                                 Yönet
                             </Button>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon">
+                                        <MoreHorizontal className="w-4 h-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={onAddMember}>
+                                        Üye ekle
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem>
+                                        Dışa aktar (CSV)
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem>
+                                        Ayarlar
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         </div>
                     )}
                 </div>

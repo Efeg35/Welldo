@@ -1,14 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { MembersHeader } from "@/components/members/members-header";
-import { MembersFilterBar } from "@/components/members/members-filter-bar";
+import { MembersFilterBar, ActiveFilter } from "@/components/members/members-filter-bar";
 import { MembersGrid } from "@/components/members/members-grid";
 import { MembersList } from "@/components/members/members-list";
-import { getMembers, Member } from "@/actions/members";
-import { useDebounce } from "@/hooks/use-debounce";
-// Note: If useDebounce doesn't exist I'll simulate it or simple effect. 
-// Assuming useDebounce hook might not exist, I will implement a simple one inside or just fetch directly for now.
+import { MemberProfilePanel } from "@/components/members/member-profile-panel";
+import { AddMemberModal } from "@/components/members/add-member-modal";
+import { getMembers, Member, MemberFilters } from "@/actions/members";
 
 interface MembersClientProps {
     communityId: string;
@@ -21,30 +20,73 @@ export function MembersClient({ communityId, initialMembers, userRole }: Members
     const [members, setMembers] = useState<Member[]>(initialMembers);
     const [searchQuery, setSearchQuery] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
 
-    // Simple debounce logic
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            if (searchQuery) {
-                fetchMembers(searchQuery);
-            } else if (searchQuery === "" && members.length !== initialMembers.length) {
-                // Reset to initial if cleared, or refetch clean
-                fetchMembers("");
+    // Panel States
+    const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+    const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+
+    // Convert active filters to API format
+    const buildFiltersFromActive = useCallback(() => {
+        const filters: MemberFilters = {};
+
+        activeFilters.forEach(filter => {
+            switch (filter.id) {
+                case 'name':
+                    filters.name = filter.value;
+                    break;
+                case 'role':
+                    filters.role = filter.value as any;
+                    break;
+                case 'location':
+                    filters.location = filter.value;
+                    break;
+                case 'score':
+                    filters.activityScore = filter.value as any;
+                    break;
             }
-        }, 300);
+        });
 
-        return () => clearTimeout(timer);
-    }, [searchQuery]);
+        if (searchQuery) {
+            filters.search = searchQuery;
+        }
 
-    const fetchMembers = async (query: string) => {
+        return filters;
+    }, [activeFilters, searchQuery]);
+
+    // Fetch members with filters
+    const fetchMembers = useCallback(async () => {
         setIsLoading(true);
         try {
-            const result = await getMembers(communityId, { search: query });
+            const filters = buildFiltersFromActive();
+            const result = await getMembers(communityId, filters);
             setMembers(result.members);
         } catch (error) {
             console.error(error);
         }
         setIsLoading(false);
+    }, [communityId, buildFiltersFromActive]);
+
+    // Debounced search effect
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            fetchMembers();
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [searchQuery, activeFilters, fetchMembers]);
+
+    // Filter handlers
+    const handleAddFilter = (filter: ActiveFilter) => {
+        setActiveFilters(prev => [...prev, filter]);
+    };
+
+    const handleRemoveFilter = (filterId: string) => {
+        setActiveFilters(prev => prev.filter(f => f.id !== filterId));
+    };
+
+    // Member actions
+    const handleMemberClick = (member: Member) => {
+        setSelectedMember(member);
     };
 
     const isAdmin = userRole === 'admin' || userRole === 'instructor';
@@ -59,8 +101,13 @@ export function MembersClient({ communityId, initialMembers, userRole }: Members
                         onChangeViewMode={setViewMode}
                         onSearch={setSearchQuery}
                         isAdmin={isAdmin}
+                        onAddMember={() => setShowAddMemberModal(true)}
                     />
-                    <MembersFilterBar />
+                    <MembersFilterBar
+                        activeFilters={activeFilters}
+                        onAddFilter={handleAddFilter}
+                        onRemoveFilter={handleRemoveFilter}
+                    />
                 </div>
             </div>
 
@@ -68,12 +115,37 @@ export function MembersClient({ communityId, initialMembers, userRole }: Members
             <div className="flex-1 p-6 overflow-y-auto">
                 <div className="max-w-7xl mx-auto w-full">
                     {viewMode === "grid" ? (
-                        <MembersGrid members={members} isLoading={isLoading} />
+                        <MembersGrid
+                            members={members}
+                            isLoading={isLoading}
+                            onMemberClick={handleMemberClick}
+                            onAddMember={() => setShowAddMemberModal(true)}
+                        />
                     ) : (
-                        <MembersList members={members} isLoading={isLoading} />
+                        <MembersList
+                            members={members}
+                            isLoading={isLoading}
+                            onMemberClick={handleMemberClick}
+                        />
                     )}
                 </div>
             </div>
+
+            {/* Member Profile Panel */}
+            <MemberProfilePanel
+                member={selectedMember}
+                open={!!selectedMember}
+                onClose={() => setSelectedMember(null)}
+                isAdmin={isAdmin}
+            />
+
+            {/* Add Member Modal */}
+            <AddMemberModal
+                open={showAddMemberModal}
+                onClose={() => setShowAddMemberModal(false)}
+                communityId={communityId}
+                onSuccess={fetchMembers}
+            />
         </div>
     );
 }

@@ -1,41 +1,46 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { Profile, UserRole } from "@/types/database";
+import { UserRole } from "@/types/database";
 
 export interface Member {
-    id: string; // user_id
+    id: string;
     full_name: string | null;
     avatar_url: string | null;
-    email: string | null; // Only visible to admins usually, but we'll include it for now
+    email: string | null;
     role: UserRole;
     joined_at: string;
-    location?: string; // Potential future field
+    location?: string;
     bio?: string;
-    headline?: string; // Potential future field
+    activity_score?: number;
 }
 
-interface GetMembersFilters {
+export interface MemberFilters {
     search?: string;
     role?: UserRole | 'all';
-    status?: 'active' | 'all'; // membership status
+    name?: string;
+    tag?: string;
+    location?: string;
+    activityScore?: 'high' | 'medium' | 'low' | 'all';
+    status?: 'active' | 'all';
 }
 
 export async function getMembers(
     communityId: string,
-    filters: GetMembersFilters = {},
+    filters: MemberFilters = {},
     page = 1,
-    limit = 20
+    limit = 50
 ) {
     const supabase = await createClient();
 
+    // Build the base query
     let query = supabase
         .from("memberships")
         .select(`
             user_id,
             status,
             created_at,
-            profiles:user_id (
+            profiles!inner (
                 id,
                 full_name,
                 avatar_url,
@@ -43,26 +48,13 @@ export async function getMembers(
                 email,
                 bio
             )
-        `)
+        `, { count: 'exact' })
         .eq("community_id", communityId);
 
-    // Apply Filters
-    if (filters.status && filters.status !== 'all') {
-        query = query.eq("status", filters.status);
-    } else {
-        // Default to active members generally, but 'all' might include past_due
-        // For now, let's just show active members by default if not specified
-        if (!filters.status) {
-            query = query.eq("status", "active");
-        }
+    // Always filter active by default
+    if (!filters.status || filters.status === 'active') {
+        query = query.eq("status", "active");
     }
-
-    // Role filtering would technically require filtering on the joined profile table, 
-    // but supabase JS client filtering on joined tables usually needs !inner join or similar syntax.
-    // For simplicity with standard RLS/Query, we might fetch and filter in memory if volume is low, 
-    // or use exact join syntax: .eq('profiles.role', role)
-
-    // Search is handled similarly.
 
     // Calculate Pagination Range
     const from = (page - 1) * limit;
@@ -77,6 +69,24 @@ export async function getMembers(
         return { members: [], total: 0 };
     }
 
+    // Get gamification data for activity scores
+    const userIds = (data || []).map((item: any) => item.profiles?.id || item.user_id);
+
+    let gamificationMap: Record<string, number> = {};
+    if (userIds.length > 0) {
+        const { data: gamificationData } = await supabase
+            .from("gamification")
+            .select("user_id, points")
+            .eq("community_id", communityId)
+            .in("user_id", userIds);
+
+        if (gamificationData) {
+            gamificationData.forEach((g: any) => {
+                gamificationMap[g.user_id] = g.points || 0;
+            });
+        }
+    }
+
     // Transform Data
     let members: Member[] = (data || []).map((item: any) => ({
         id: item.profiles?.id || item.user_id,
@@ -85,10 +95,12 @@ export async function getMembers(
         email: item.profiles?.email,
         role: item.profiles?.role || "member",
         joined_at: item.created_at,
-        bio: item.profiles?.bio
+        bio: item.profiles?.bio,
+        activity_score: gamificationMap[item.profiles?.id || item.user_id] || 0
     }));
 
-    // Apply In-Memory Filters (if not applied in DB query due to joined table limitations in simple format)
+    // Apply In-Memory Filters
+    // Search filter (name or email)
     if (filters.search) {
         const searchLower = filters.search.toLowerCase();
         members = members.filter(m =>
@@ -97,12 +109,61 @@ export async function getMembers(
         );
     }
 
+    // Name filter
+    if (filters.name) {
+        const nameLower = filters.name.toLowerCase();
+        members = members.filter(m =>
+            m.full_name?.toLowerCase().includes(nameLower)
+        );
+    }
+
+    // Role filter
     if (filters.role && filters.role !== 'all') {
         members = members.filter(m => m.role === filters.role);
     }
 
+    // Location filter
+    if (filters.location) {
+        const locationLower = filters.location.toLowerCase();
+        members = members.filter(m =>
+            m.location?.toLowerCase().includes(locationLower)
+        );
+    }
+
+    // Activity score filter
+    if (filters.activityScore && filters.activityScore !== 'all') {
+        members = members.filter(m => {
+            const score = m.activity_score || 0;
+            switch (filters.activityScore) {
+                case 'high': return score >= 80;
+                case 'medium': return score >= 40 && score < 80;
+                case 'low': return score < 40;
+                default: return true;
+            }
+        });
+    }
+
     return {
         members,
-        total: count || 0
+        total: count || members.length
     };
+}
+
+// Get available tags for filtering
+export async function getMemberTags(communityId: string) {
+    // For now, return empty array. Can be extended when tags system is implemented
+    return [];
+}
+
+// Get spaces for access filtering
+export async function getSpacesForFilter(communityId: string) {
+    const supabase = await createClient();
+
+    const { data } = await supabase
+        .from("channels")
+        .select("id, name")
+        .eq("community_id", communityId)
+        .order("name");
+
+    return data || [];
 }
