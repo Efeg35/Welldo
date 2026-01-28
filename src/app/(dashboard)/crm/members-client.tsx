@@ -5,17 +5,18 @@ import { MembersHeader } from "@/components/members/members-header";
 import { MembersFilterBar, ActiveFilter } from "@/components/members/members-filter-bar";
 import { MembersGrid } from "@/components/members/members-grid";
 import { MembersList } from "@/components/members/members-list";
-import { MemberProfilePanel } from "@/components/members/member-profile-panel";
-import { AddMemberModal } from "@/components/members/add-member-modal";
+import { MemberProfilePanel } from "../../../components/members/member-profile-panel";
+import { AddMemberModal } from "../../../components/members/add-member-modal";
 import { getMembers, Member, MemberFilters } from "@/actions/members";
 
 interface MembersClientProps {
     communityId: string;
     initialMembers: Member[];
     userRole: string;
+    spaces: { id: string; name: string; type: string }[];
 }
 
-export function MembersClient({ communityId, initialMembers, userRole }: MembersClientProps) {
+export function MembersClient({ communityId, initialMembers, userRole, spaces }: MembersClientProps) {
     const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
     const [members, setMembers] = useState<Member[]>(initialMembers);
     const [searchQuery, setSearchQuery] = useState("");
@@ -43,6 +44,9 @@ export function MembersClient({ communityId, initialMembers, userRole }: Members
                     break;
                 case 'score':
                     filters.activityScore = filter.value as any;
+                    break;
+                case 'access':
+                    filters.spaceAccess = filter.value;
                     break;
             }
         });
@@ -107,6 +111,7 @@ export function MembersClient({ communityId, initialMembers, userRole }: Members
                         activeFilters={activeFilters}
                         onAddFilter={handleAddFilter}
                         onRemoveFilter={handleRemoveFilter}
+                        availableSpaces={spaces}
                     />
                 </div>
             </div>

@@ -23,6 +23,7 @@ export interface MemberFilters {
     location?: string;
     activityScore?: 'high' | 'medium' | 'low' | 'all';
     status?: 'active' | 'all';
+    spaceAccess?: string;
 }
 
 export async function getMembers(
@@ -50,6 +51,24 @@ export async function getMembers(
             )
         `, { count: 'exact' })
         .eq("community_id", communityId);
+
+    // Filter by Space Access (if provided)
+    if (filters.spaceAccess) {
+        // Get users who are members of this channel
+        const { data: channelMembers } = await supabase
+            .from("channel_members")
+            .select("user_id")
+            .eq("channel_id", filters.spaceAccess);
+
+        const authorizedUserIds = (channelMembers || []).map(cm => cm.user_id);
+
+        if (authorizedUserIds.length > 0) {
+            query = query.in("user_id", authorizedUserIds);
+        } else {
+            // No members in this channel, return empty result
+            return { members: [], total: 0 };
+        }
+    }
 
     // Always filter active by default
     if (!filters.status || filters.status === 'active') {
@@ -159,11 +178,16 @@ export async function getMemberTags(communityId: string) {
 export async function getSpacesForFilter(communityId: string) {
     const supabase = await createClient();
 
+    // Fetch channels (spaces)
     const { data } = await supabase
         .from("channels")
-        .select("id, name")
+        .select("id, name, type")
         .eq("community_id", communityId)
-        .order("name");
+        .order("position", { ascending: true });
 
-    return data || [];
+    return (data || []).map(channel => ({
+        id: channel.id,
+        name: channel.name,
+        type: channel.type
+    }));
 }

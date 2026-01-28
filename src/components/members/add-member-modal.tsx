@@ -1,5 +1,5 @@
 "use client";
-
+import { inviteMembers } from "@/actions/invite-member";
 import { useState } from "react";
 import {
     Dialog,
@@ -61,10 +61,10 @@ export function AddMemberModal({ open, onClose, communityId, onSuccess }: AddMem
                 return;
             }
 
-            // TODO: Call server action to send invitations
-            // await inviteMembers(communityId, emailList, role, message);
+            // Call server action to send invitations
+            await inviteMembers(communityId, emailList, role, message);
 
-            // For now, just show success
+            // Show success message
             toast.success(`${emailList.length} kişiye davet gönderildi`);
 
             // Reset form

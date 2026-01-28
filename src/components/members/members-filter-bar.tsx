@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
     Popover,
@@ -16,11 +16,8 @@ import {
     Tag,
     Calendar,
     Trophy,
-    X,
-    Check
+    X
 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { UserRole } from "@/types/database";
 
 export interface ActiveFilter {
     id: string;
@@ -33,17 +30,18 @@ interface MembersFilterBarProps {
     activeFilters: ActiveFilter[];
     onAddFilter: (filter: ActiveFilter) => void;
     onRemoveFilter: (filterId: string) => void;
+    availableSpaces?: { id: string; name: string }[];
 }
 
 interface FilterDefinition {
     id: string;
     label: string;
     icon: any;
-    type: 'text' | 'select' | 'range';
+    type: 'text' | 'select';
     options?: { value: string; label: string }[];
 }
 
-const filterDefinitions: FilterDefinition[] = [
+const baseFilterDefinitions: FilterDefinition[] = [
     { id: "name", label: "İsim", icon: User, type: "text" },
     {
         id: "role",
@@ -55,6 +53,13 @@ const filterDefinitions: FilterDefinition[] = [
             { value: "instructor", label: "Eğitmen" },
             { value: "member", label: "Üye" },
         ]
+    },
+    {
+        id: "access",
+        label: "Alan erişimi",
+        icon: Users,
+        type: "select",
+        options: [] // To be populated dynamically
     },
     { id: "tag", label: "Etiket", icon: Tag, type: "text" },
     { id: "rsvp", label: "Etkinlik LCV", icon: Calendar, type: "text" },
@@ -98,7 +103,7 @@ function FilterPopover({
             <PopoverContent className="w-64 p-3" align="start">
                 <div className="space-y-3">
                     <div className="text-sm font-medium text-gray-900">
-                        {filter.label} ile filtrele
+                        {filter.id === 'access' ? 'Filtrele: Alanlar' : `${filter.label} ile filtrele`}
                     </div>
 
                     {filter.type === "text" && (
@@ -108,6 +113,11 @@ function FilterPopover({
                                 value={inputValue}
                                 onChange={(e) => setInputValue(e.target.value)}
                                 className="h-9"
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter" && inputValue.trim()) {
+                                        handleApply(inputValue);
+                                    }
+                                }}
                             />
                             <Button
                                 size="sm"
@@ -121,15 +131,14 @@ function FilterPopover({
                     )}
 
                     {filter.type === "select" && filter.options && (
-                        <div className="space-y-1">
+                        <div className="space-y-1 max-h-60 overflow-y-auto">
                             {filter.options.map((option) => (
                                 <button
                                     key={option.value}
                                     className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-gray-100 text-left"
                                     onClick={() => handleApply(option.value, option.label)}
                                 >
-                                    <Check className="w-4 h-4 opacity-0" />
-                                    {option.label}
+                                    <span className="truncate">{option.label}</span>
                                 </button>
                             ))}
                         </div>
@@ -140,11 +149,24 @@ function FilterPopover({
     );
 }
 
-export function MembersFilterBar({ activeFilters, onAddFilter, onRemoveFilter }: MembersFilterBarProps) {
+export function MembersFilterBar({ activeFilters, onAddFilter, onRemoveFilter, availableSpaces = [] }: MembersFilterBarProps) {
     const [addFilterOpen, setAddFilterOpen] = useState(false);
 
+    // Create dynamic filters with current available spaces
+    const filters = useMemo(() => {
+        return baseFilterDefinitions.map(def => {
+            if (def.id === 'access') {
+                return {
+                    ...def,
+                    options: availableSpaces.map(s => ({ value: s.id, label: s.name }))
+                };
+            }
+            return def;
+        });
+    }, [availableSpaces]);
+
     // Get filters that are not yet active
-    const availableFilters = filterDefinitions.filter(
+    const availableFiltersList = filters.filter(
         f => !activeFilters.some(af => af.id === f.id)
     );
 
@@ -163,9 +185,9 @@ export function MembersFilterBar({ activeFilters, onAddFilter, onRemoveFilter }:
             {activeFilters.map((filter) => (
                 <div
                     key={filter.id}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white rounded-full text-sm font-medium"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white rounded-full text-sm font-medium shrink-0"
                 >
-                    <span>{filter.label}: {filter.displayValue}</span>
+                    <span className="truncate max-w-[150px]">{filter.label}: {filter.displayValue}</span>
                     <button
                         onClick={() => onRemoveFilter(filter.id)}
                         className="hover:bg-white/20 rounded-full p-0.5"
@@ -176,7 +198,7 @@ export function MembersFilterBar({ activeFilters, onAddFilter, onRemoveFilter }:
             ))}
 
             {/* Available Filter Buttons */}
-            {filterDefinitions.slice(0, 4).map((filter) => {
+            {filters.slice(0, 4).map((filter) => {
                 const isActive = activeFilters.some(af => af.id === filter.id);
                 if (isActive) return null;
 
@@ -199,7 +221,7 @@ export function MembersFilterBar({ activeFilters, onAddFilter, onRemoveFilter }:
             })}
 
             {/* Add Filter Dropdown */}
-            {availableFilters.length > 0 && (
+            {availableFiltersList.length > 0 && (
                 <Popover open={addFilterOpen} onOpenChange={setAddFilterOpen}>
                     <PopoverTrigger asChild>
                         <Button
@@ -213,7 +235,7 @@ export function MembersFilterBar({ activeFilters, onAddFilter, onRemoveFilter }:
                     </PopoverTrigger>
                     <PopoverContent className="w-56 p-2" align="start">
                         <div className="space-y-1">
-                            {availableFilters.map((filter) => (
+                            {availableFiltersList.map((filter) => (
                                 <FilterPopover
                                     key={filter.id}
                                     filter={filter}
