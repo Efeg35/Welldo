@@ -1,26 +1,25 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { startOfMonth, endOfMonth, addMonths } from "date-fns";
-import {
-    EventsHubHeader,
-    EventsCalendarView,
-    EventsListView,
-    EventDetailPanel,
-    type ViewMode,
-    type TypeFilter,
-} from "@/components/events";
-import { CreateEventModal } from "@/components/community/create-event";
-import { getEventsForHub } from "@/actions/events";
-import type { Event, Profile } from "@/types";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { EventsHubHeader, type ViewMode, type TypeFilter } from "@/components/events/events-hub-header";
+import { EventsCalendarView } from "@/components/events/events-calendar-view";
+import { EventsListView } from "@/components/events/events-list-view";
+import { EventDetailPanel } from "@/components/events/event-detail-panel";
+import { EventsHubSettingsPanel } from "@/components/events/events-hub-settings-panel";
+import { updateChannel } from "@/actions/community";
+import { toast } from "sonner";
+import type { Event } from "@/types";
 
 interface EventsHubClientProps {
     initialEvents: Event[];
     isAdmin: boolean;
     userId?: string;
-    userProfile: Profile | null;
+    userProfile?: any;
     communityId?: string;
     channelId?: string;
+    accessLevel?: 'open' | 'private' | 'secret';
+    initialSettings?: any;
 }
 
 export function EventsHubClient({
@@ -30,54 +29,53 @@ export function EventsHubClient({
     userProfile,
     communityId,
     channelId,
+    accessLevel: initialAccessLevel,
+    initialSettings
 }: EventsHubClientProps) {
-    const [viewMode, setViewMode] = useState<ViewMode>("calendar");
+    const router = useRouter();
+    const [detailOpen, setDetailOpen] = useState(false);
+    const [currentAccessLevel, setCurrentAccessLevel] = useState(initialAccessLevel);
+    const [channelSettings, setChannelSettings] = useState(initialSettings);
+    const [settingsOpen, setSettingsOpen] = useState(false);
+    const [viewMode, setViewMode] = useState<ViewMode>(channelSettings?.default_view || "calendar");
     const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
     const [currentMonth, setCurrentMonth] = useState(new Date());
-    const [events, setEvents] = useState<Event[]>(initialEvents);
     const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
-    const [detailOpen, setDetailOpen] = useState(false);
-    const [createModalOpen, setCreateModalOpen] = useState(false);
-    const [isLoading, setIsLoading] = useState(false);
 
-    // Filter events based on typeFilter
-    const filteredEvents = useMemo(() => {
-        if (typeFilter === "all") return events;
-        return events.filter((event) => {
-            if (typeFilter === "physical") return event.event_type === "physical";
-            if (typeFilter === "online") {
-                return event.event_type === "online_zoom" || event.event_type === "welldo_live";
-            }
-            return true;
-        });
-    }, [events, typeFilter]);
-
-    // Refetch events when month or type filter changes
-    const handleMonthChange = async (newMonth: Date) => {
-        setCurrentMonth(newMonth);
-        setIsLoading(true);
-        try {
-            const startDate = startOfMonth(newMonth).toISOString();
-            const endDate = endOfMonth(addMonths(newMonth, 1)).toISOString(); // Fetch 2 months for calendar overlap
-            const data = await getEventsForHub({
-                typeFilter,
-                startDate,
-            });
-            setEvents(data);
-        } catch (error) {
-            console.error(error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    // Filter events by type
+    const filteredEvents = initialEvents.filter(event => {
+        if (typeFilter === "all") return true;
+        if (typeFilter === "physical") return event.event_type === "physical";
+        if (typeFilter === "online") return event.event_type === "online_zoom" || event.event_type === "welldo_live";
+        if (typeFilter === "paid") return event.ticket_price > 0;
+        return true;
+    });
 
     const handleEventClick = (event: Event) => {
         setSelectedEvent(event);
         setDetailOpen(true);
     };
 
+    const handleMonthChange = (newMonth: Date) => {
+        setCurrentMonth(newMonth);
+    };
+
     const handleNewEvent = () => {
-        setCreateModalOpen(true);
+        // Navigate to event channel for creation (or implement inline modal later)
+        if (communityId && channelId) {
+            router.push(`/community/${communityId}/events?create=true`);
+        }
+    };
+
+    const handleAccessLevelChange = async (level: 'open' | 'private' | 'secret') => {
+        if (!channelId) return;
+        try {
+            await updateChannel(channelId, { access_level: level });
+            setCurrentAccessLevel(level);
+            toast.success(level === 'open' ? 'Kanal herkese açık yapıldı' : 'Kanal gizli yapıldı');
+        } catch (error) {
+            toast.error('Erişim ayarı güncellenemedi');
+        }
     };
 
     return (
@@ -89,7 +87,11 @@ export function EventsHubClient({
                 typeFilter={typeFilter}
                 setTypeFilter={setTypeFilter}
                 isAdmin={isAdmin}
+                canSwitchView={isAdmin || channelSettings?.allow_view_switch === true}
                 onNewEvent={handleNewEvent}
+                onOpenSettings={() => setSettingsOpen(true)}
+                accessLevel={currentAccessLevel}
+                onAccessLevelChange={handleAccessLevelChange}
             />
 
             {/* Content */}
@@ -106,18 +108,18 @@ export function EventsHubClient({
                         </div>
                     </div>
                 ) : (
-                    <div className="h-full overflow-y-auto p-4 md:p-6 pb-20 md:pb-6">
-                        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden min-h-full">
-                            <EventsListView
-                                events={filteredEvents}
-                                onEventClick={handleEventClick}
-                            />
-                        </div>
+                    <div className="h-full overflow-y-auto pb-20 md:pb-6">
+                        <EventsListView
+                            events={filteredEvents}
+                            onEventClick={handleEventClick}
+                            userId={userId}
+                            isAdmin={isAdmin}
+                        />
                     </div>
                 )}
             </div>
 
-            {/* Detail Panel */}
+            {/* Event Detail Panel */}
             <EventDetailPanel
                 event={selectedEvent}
                 open={detailOpen}
@@ -126,20 +128,19 @@ export function EventsHubClient({
                 isAdmin={isAdmin}
             />
 
-            {/* Create Event Modal */}
-            {isAdmin && userProfile && communityId && channelId && (
-                <CreateEventModal
-                    isOpen={createModalOpen}
-                    onClose={() => setCreateModalOpen(false)}
-                    communityId={communityId}
-                    channelId={channelId}
-                    currentUser={{
-                        full_name: userProfile.full_name,
-                        avatar_url: userProfile.avatar_url,
-                        iyzico_sub_merchant_key: (userProfile as any).iyzico_sub_merchant_key,
-                    }}
-                />
-            )}
+            {/* Hub Settings Panel */}
+            <EventsHubSettingsPanel
+                open={settingsOpen}
+                onOpenChange={setSettingsOpen}
+                currentSettings={channelSettings}
+                onSave={async (newSettings) => {
+                    if (!channelId) return;
+                    await updateChannel(channelId, { settings: newSettings });
+                    setChannelSettings(newSettings);
+                    toast.success("Ayarlar kaydedildi");
+                }}
+            />
         </div>
     );
 }
+

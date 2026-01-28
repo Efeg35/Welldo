@@ -20,8 +20,12 @@ import {
     Copy,
     Edit2,
     Share2,
+    CheckCircle2,
+    Circle,
     Eye,
-    EyeOff
+    EyeOff,
+    Lock,
+    XCircle
 } from "lucide-react";
 import { CreateEventModal } from "./create-event";
 import {
@@ -35,6 +39,7 @@ import {
     setEventResponse,
     removeEventResponse
 } from "@/actions/events";
+import { updateChannel } from "@/actions/community";
 import { format, formatDistanceToNow, isThisMonth, isThisYear, startOfMonth } from "date-fns";
 import { tr } from "date-fns/locale";
 import {
@@ -45,10 +50,11 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-    CheckCircle2,
-    Circle,
-    XCircle
-} from "lucide-react";
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
+
 import { DeleteSpaceDialog } from "./delete-space-dialog";
 import { DeleteEventDialog } from "./delete-event-dialog";
 import { ChannelSettingsOverlay } from "@/components/community/channel-settings-overlay";
@@ -606,6 +612,8 @@ export function EventFeed({ channel, user, initialEvents, members = [] }: EventF
                         </div>
 
                         <div className="flex items-center gap-3">
+
+
                             {(isInstructor || settings.allow_members_to_create_posts !== false) && (
                                 <Button onClick={() => setIsCreateModalOpen(true)} size="sm" className="bg-[#1c1c1c] hover:bg-black text-white rounded-full px-5 font-medium shadow-sm transition-all hover:scale-105 active:scale-95 h-9 cursor-pointer">
                                     Yeni etkinlik

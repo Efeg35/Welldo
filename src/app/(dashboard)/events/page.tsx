@@ -23,13 +23,24 @@ export default async function EventsPage() {
             communityId = community.id;
             const { data: channel } = await supabase
                 .from('channels')
-                .select('id')
+                .select('id, access_level')
                 .eq('community_id', community.id)
                 .eq('type', 'event')
                 .limit(1)
                 .single();
-            if (channel) channelId = channel.id;
+            if (channel) {
+                channelId = channel.id;
+            }
         }
+    }
+
+    // Get the channel data
+    let accessLevel: 'open' | 'private' | 'secret' | undefined;
+    let channelSettings: any = null;
+    if (channelId) {
+        const { data: channelData } = await supabase.from('channels').select('access_level, settings').eq('id', channelId).single();
+        accessLevel = channelData?.access_level;
+        channelSettings = channelData?.settings;
     }
 
     // Fetch initial events (all types, future events)
@@ -46,6 +57,8 @@ export default async function EventsPage() {
             userProfile={userProfile}
             communityId={communityId || undefined}
             channelId={channelId || undefined}
+            accessLevel={accessLevel}
+            initialSettings={channelSettings}
         />
     );
 }

@@ -89,7 +89,7 @@ export function EventDetailPanel({
     };
 
     const handleManageAttendees = () => {
-        router.push(`/events/${event.id}/attendees`);
+        router.push(`/events/${event.id}`);
         onOpenChange(false);
     };
 
@@ -97,18 +97,11 @@ export function EventDetailPanel({
         <Sheet open={open} onOpenChange={onOpenChange}>
             <SheetContent side="right" className="w-full sm:max-w-lg p-0 flex flex-col">
                 {/* Header with Close */}
-                <div className="flex items-center justify-between p-4 border-b border-gray-100">
+                <div className="flex items-center justify-between p-4 border-b border-gray-100 mr-8">
                     <SheetTitle className="text-lg font-bold text-gray-900">
                         Etkinlik Detayı
                     </SheetTitle>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => onOpenChange(false)}
-                        className="h-8 w-8"
-                    >
-                        <X className="w-5 h-5" />
-                    </Button>
+                    {/* Default SheetClose is absolute positioned top-4 right-4 from SheetContent */}
                 </div>
 
                 {/* Scrollable Content */}
@@ -125,6 +118,11 @@ export function EventDetailPanel({
                     )}
 
                     <div className="p-6 space-y-6">
+                        {/* ... (truncated for brevity, ensure context matches) ... */}
+                        {/* Actually easier to just replace the header block and the specific location block separately or carefully */}
+                        {/* Let me try a cleaner replacement for the Header first */}
+
+
                         {/* Title & Type */}
                         <div>
                             <div className="flex items-center gap-2 mb-2">
@@ -196,13 +194,23 @@ export function EventDetailPanel({
                                     <p className="text-blue-900 font-medium flex items-center gap-2">
                                         <Video className="w-4 h-4" /> Çevrimiçi Etkinlik
                                     </p>
-                                    {(hasTicket || isAttending) && event.zoom_meeting_id ? (
-                                        <p className="text-sm text-blue-700 mt-1">
-                                            Etkinlik linki biletinizle birlikte e-posta ile gönderildi.
-                                        </p>
+                                    {hasTicket || isAttending ? (
+                                        event.event_url ? (
+                                            <div className="mt-2 text-sm text-blue-700">
+                                                <p className="mb-2">Etkinlik linki:</p>
+                                                <a href={event.event_url} target="_blank" rel="noopener noreferrer" className="font-medium underline hover:text-blue-900 break-all">
+                                                    {event.event_url}
+                                                </a>
+                                                <p className="mt-1 text-xs text-blue-600">Link ayrıca e-posta ile gönderildi.</p>
+                                            </div>
+                                        ) : (
+                                            <p className="text-sm text-blue-700 mt-1">
+                                                Etkinlik linki yakında eklenecektir.
+                                            </p>
+                                        )
                                     ) : (
                                         <p className="text-sm text-blue-600 mt-1">
-                                            Katılım linki bilet satın alındıktan sonra görünecektir.
+                                            Katılım linki bilet satın alındıktan veya kayıt olduktan sonra görünecektir.
                                         </p>
                                     )}
                                 </div>
@@ -302,6 +310,6 @@ export function EventDetailPanel({
                     </div>
                 </div>
             </SheetContent>
-        </Sheet>
+        </Sheet >
     );
 }

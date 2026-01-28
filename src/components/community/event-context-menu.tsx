@@ -10,14 +10,18 @@ import {
     DropdownMenuLabel
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, Bookmark, Edit, Copy, Trash, Pin } from "lucide-react";
+import { MoreHorizontal, Bookmark, Edit, Trash, Pin, Calendar, Link as LinkIcon } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { duplicateEvent, pinEventToSpace, toggleEventBookmark, deleteEvent } from "@/actions/events";
+import { useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
+import { pinEventToSpace, toggleEventBookmark, deleteEvent } from "@/actions/events";
 import { Event } from "@/types";
 import { EditEventModal } from "./edit-event-modal";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import * as ics from 'ics';
+import { saveAs } from 'file-saver';
 
 interface EventContextMenuProps {
     event: Event;
@@ -27,18 +31,14 @@ interface EventContextMenuProps {
 
 export function EventContextMenu({ event, currentUserId, isAdmin }: EventContextMenuProps) {
     const [isPending, startTransition] = useTransition();
+    const router = useRouter(); // Need to import useRouter
     const [isEditOpen, setIsEditOpen] = useState(false);
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
     const [isPinned, setIsPinned] = useState(event.is_pinned || false);
 
-    const handleDuplicate = () => {
-        startTransition(async () => {
-            try {
-                await duplicateEvent(event.id);
-                toast.success("Etkinlik kopyalandı");
-            } catch { toast.error("Hata oluştu"); }
-        });
-    };
+    // Check if current user has bookmarked
+    const hasBookmarked = event.bookmarks?.some((b: any) => b.user_id === currentUserId) || false;
+    const [isBookmarked, setIsBookmarked] = useState(hasBookmarked);
 
     const handlePin = (checked: boolean) => {
         setIsPinned(checked);
@@ -46,6 +46,7 @@ export function EventContextMenu({ event, currentUserId, isAdmin }: EventContext
             try {
                 await pinEventToSpace(event.id, checked);
                 toast.success(checked ? "Etkinlik sabitlendi" : "Sabitleme kaldırıldı");
+                router.refresh();
             } catch {
                 setIsPinned(!checked);
                 toast.error("Hata oluştu");
@@ -54,36 +55,68 @@ export function EventContextMenu({ event, currentUserId, isAdmin }: EventContext
     };
 
     const handleBookmark = () => {
+        const newState = !isBookmarked;
+        setIsBookmarked(newState); // Optimistic update
+
         startTransition(async () => {
-            try { await toggleEventBookmark(event.id); toast.success("İşlem başarılı"); }
-            catch { toast.error("Hata oluştu"); }
+            try {
+                await toggleEventBookmark(event.id);
+                toast.success(newState ? "Kaydedilenlere eklendi" : "Kaydedilenlerden çıkarıldı");
+                router.refresh();
+            }
+            catch {
+                setIsBookmarked(!newState); // Revert
+                toast.error("Hata oluştu");
+            }
         });
     };
 
     const handleDelete = async () => {
-        // Need deleteEvent action (assuming it exists or I added it separately)
-        // If not added yet, I should add it.
-        // For now, let's assume it calls a delete function.
-        // wait... did I add deleteEvent? I checked actions/events.ts before.
-        // Let's optimize: assume deleteEvent is imported. If not, I'll need to fix import error.
         try {
-            await import("@/actions/events").then(m => m.unpublishEvent(event.id)); // Using unpublish as delete for now if delete missing?
-            // Actually, user asked for DELETE.
-            // I'll check imports later.
-            toast.success("Etkinlik silindi (veya yayından kaldırıldı)");
+            await deleteEvent(event.id);
+            toast.success("Etkinlik silindi");
             setIsDeleteOpen(false);
+            router.refresh();
         } catch {
             toast.error("Hata");
         }
     };
 
-    if (!isAdmin) return null; // Only for admin as per Scenario A req ("Kullanıcı Admin ise")
+    const handleAddToCalendar = () => {
+        const start = new Date(event.start_time);
+        const end = new Date(event.end_time || event.start_time);
+
+        const eventAttributes: ics.EventAttributes = {
+            start: [start.getFullYear(), start.getMonth() + 1, start.getDate(), start.getHours(), start.getMinutes()],
+            end: [end.getFullYear(), end.getMonth() + 1, end.getDate(), end.getHours(), end.getMinutes()],
+            title: event.title,
+            description: event.description || "",
+            location: event.event_type === 'physical' ? event.location_address || "TBD" : "Online",
+            url: event.event_url || window.location.href,
+        };
+
+        ics.createEvent(eventAttributes, (error, value) => {
+            if (error) {
+                console.error(error);
+                return;
+            }
+            const blob = new Blob([value], { type: "text/calendar;charset=utf-8" });
+            saveAs(blob, `${event.title}.ics`);
+        });
+    };
+
+    const handleCopyLink = () => {
+        const url = `${window.location.origin}/events/${event.id}`;
+        navigator.clipboard.writeText(url).then(() => {
+            toast.success("Bağlantı kopyalandı!");
+        });
+    };
 
     return (
         <>
             <DropdownMenu>
                 <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:bg-gray-100 rounded-lg">
                         <MoreHorizontal className="w-4 h-4" />
                     </Button>
                 </DropdownMenuTrigger>
@@ -93,64 +126,80 @@ export function EventContextMenu({ event, currentUserId, isAdmin }: EventContext
                     </DropdownMenuLabel>
 
                     <DropdownMenuItem onClick={handleBookmark} className="cursor-pointer">
-                        <Bookmark className="w-4 h-4 mr-2" /> Kaydet
+                        <Bookmark className={cn("w-4 h-4 mr-2", isBookmarked && "fill-current text-blue-600")} />
+                        {isBookmarked ? "Kaydedildi" : "Kaydet"}
                     </DropdownMenuItem>
 
-                    <DropdownMenuItem onClick={() => setIsEditOpen(true)} className="cursor-pointer">
-                        <Edit className="w-4 h-4 mr-2" /> Düzenle
+                    <DropdownMenuItem onClick={handleAddToCalendar} className="cursor-pointer">
+                        <Calendar className="w-4 h-4 mr-2" /> Takvime Ekle
                     </DropdownMenuItem>
 
-                    <DropdownMenuItem onClick={handleDuplicate} className="cursor-pointer">
-                        <Copy className="w-4 h-4 mr-2" /> Kopyala/Çoğalt
+                    <DropdownMenuItem onClick={handleCopyLink} className="cursor-pointer">
+                        <LinkIcon className="w-4 h-4 mr-2" /> Bağlantıyı Kopyala
                     </DropdownMenuItem>
 
-                    <DropdownMenuItem
-                        onClick={() => setIsDeleteOpen(true)}
-                        className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
-                    >
-                        <Trash className="w-4 h-4 mr-2" /> Sil
-                    </DropdownMenuItem>
+                    {isAdmin && (
+                        <>
+                            <DropdownMenuSeparator />
 
-                    <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => setIsEditOpen(true)} className="cursor-pointer">
+                                <Edit className="w-4 h-4 mr-2" /> Düzenle
+                            </DropdownMenuItem>
 
-                    <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1.5">
-                        Ayarlar
-                    </DropdownMenuLabel>
+                            <DropdownMenuItem
+                                onClick={() => setIsDeleteOpen(true)}
+                                className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                            >
+                                <Trash className="w-4 h-4 mr-2" /> Sil
+                            </DropdownMenuItem>
 
-                    <div className="px-2 py-1.5 flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-2">
-                            <Pin className="w-4 h-4 text-gray-500" />
-                            <span>Alana Sabitle</span>
-                        </div>
-                        <Switch
-                            checked={isPinned}
-                            onCheckedChange={handlePin}
-                            className="scale-75"
-                        />
-                    </div>
+                            <DropdownMenuSeparator />
+
+                            <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1.5">
+                                Ayarlar
+                            </DropdownMenuLabel>
+
+                            <div className="px-2 py-1.5 flex items-center justify-between text-sm hover:bg-gray-50 rounded-sm cursor-pointer" onClick={() => handlePin(!isPinned)}>
+                                <div className="flex items-center gap-2">
+                                    <Pin className="w-4 h-4 text-gray-500" />
+                                    <span>Alana Sabitle</span>
+                                </div>
+                                <Switch
+                                    checked={isPinned}
+                                    onCheckedChange={handlePin}
+                                    className="scale-75"
+                                    onClick={(e) => e.stopPropagation()}
+                                />
+                            </div>
+                        </>
+                    )}
                 </DropdownMenuContent>
             </DropdownMenu>
 
-            <EditEventModal
-                isOpen={isEditOpen}
-                onClose={() => setIsEditOpen(false)}
-                eventId={event.id}
-                communityId={event.community_id}
-                currentUser={{ id: currentUserId } as any}
-            />
+            {isAdmin && (
+                <>
+                    <EditEventModal
+                        isOpen={isEditOpen}
+                        onClose={() => setIsEditOpen(false)}
+                        eventId={event.id}
+                        communityId={event.community_id}
+                        currentUser={{ id: currentUserId } as any}
+                    />
 
-            <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Etkinliği silmek istediğine emin misin?</DialogTitle>
-                        <DialogDescription>Geri alınamaz.</DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                        <Button variant="ghost" onClick={() => setIsDeleteOpen(false)}>İptal</Button>
-                        <Button variant="destructive" onClick={handleDelete}>Sil</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                    <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>Etkinliği silmek istediğine emin misin?</DialogTitle>
+                                <DialogDescription>Geri alınamaz.</DialogDescription>
+                            </DialogHeader>
+                            <DialogFooter>
+                                <Button variant="ghost" onClick={() => setIsDeleteOpen(false)}>İptal</Button>
+                                <Button variant="destructive" onClick={handleDelete}>Sil</Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+                </>
+            )}
         </>
     );
 }

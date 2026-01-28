@@ -14,7 +14,7 @@ import { BookmarksPopover } from "@/components/layout/bookmarks-popover";
 const navigation = [
     { href: "/dashboard", label: "Ana Sayfa" },
     { href: "/crm", label: "Üye Yönetimi" },
-    { href: "/events", label: "Etkinlikler" },
+    { href: "/events", label: "Etkinlik Merkezi" },
     { href: "/live", label: "Canlı Yayın" },
     { href: "/courses", label: "Kurslar" },
     { href: "/leaderboard", label: "Sıralama" },

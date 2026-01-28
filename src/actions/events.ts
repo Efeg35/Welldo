@@ -708,7 +708,10 @@ export async function getEventsForHub(options?: {
                 checked_in_at,
                 user:profiles(id, full_name, avatar_url)
             ),
-            tickets:tickets(user_id),
+            tickets:tickets(
+                user_id,
+                user:profiles(id, full_name, avatar_url)
+            ),
             bookmarks(user_id)
         `)
         .eq('status', 'published')

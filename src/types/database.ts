@@ -98,6 +98,7 @@ export interface Event {
     event_type: EventType;
     status: EventStatus;
     location_address: string | null;
+    event_url: string | null;
     zoom_meeting_id: string | null;
     zoom_password: string | null;
     start_time: string;
