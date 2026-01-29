@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Image, Upload, X, Loader2 } from "lucide-react";
 import { updateCommunityBanner, WelcomeBannerSettings, updateCoverPhoto } from "@/actions/community-settings";
+import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 
 type SettingsTab = "banner" | "cover" | null;
@@ -31,10 +32,12 @@ export function MembersSettingsSheet({ openTab, onClose, communityName = "WellDo
     const [bannerDescription, setBannerDescription] = useState("İlk iş etkinliklere göz at.");
     const [showCta, setShowCta] = useState(true);
     const [bannerImage, setBannerImage] = useState<string | null>(null);
+    const [bannerFile, setBannerFile] = useState<File | null>(null);
     const [isSaving, setIsSaving] = useState(false);
 
     // Cover States
     const [coverImage, setCoverImage] = useState<string | null>(null);
+    const [coverFile, setCoverFile] = useState<File | null>(null);
 
     // Refs
     const bannerInputRef = useRef<HTMLInputElement>(null);
@@ -43,22 +46,48 @@ export function MembersSettingsSheet({ openTab, onClose, communityName = "WellDo
     const isOpen = openTab !== null;
     const isBanner = openTab === "banner";
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, setter: (url: string) => void) => {
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, setUrl: (url: string | null) => void, setFile: (file: File | null) => void) => {
         const file = e.target.files?.[0];
         if (file) {
+            setFile(file);
             const url = URL.createObjectURL(file);
-            setter(url);
+            setUrl(url);
         }
+    };
+
+    const uploadImage = async (file: File) => {
+        const supabase = createClient();
+        const fileExt = file.name.split('.').pop();
+        const fileName = `community-${communityId}-${Math.random()}.${fileExt}`;
+        const filePath = `community-assets/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+            .from('community-assets')
+            .upload(filePath, file);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+            .from('community-assets')
+            .getPublicUrl(filePath);
+
+        return publicUrl;
     };
 
     const handleSave = async () => {
         setIsSaving(true);
         try {
             if (isBanner) {
+                let finalBannerUrl = bannerImage;
+
+                if (bannerFile) {
+                    finalBannerUrl = await uploadImage(bannerFile);
+                }
+
                 const settings: WelcomeBannerSettings = {
                     title: bannerTitle,
                     description: bannerDescription,
-                    image_url: bannerImage,
+                    image_url: finalBannerUrl,
                     show_button: showCta,
                     button_text: "Etkinlikleri Gör"
                 };
@@ -66,8 +95,14 @@ export function MembersSettingsSheet({ openTab, onClose, communityName = "WellDo
                 toast.success("Hoşgeldin panosu kaydedildi");
                 onClose();
             } else {
+                let finalCoverUrl = coverImage;
+
+                if (coverFile) {
+                    finalCoverUrl = await uploadImage(coverFile);
+                }
+
                 // Cover photo is saved separately
-                await updateCoverPhoto(communityId, coverImage);
+                await updateCoverPhoto(communityId, finalCoverUrl);
                 toast.success("Kapak fotoğrafı kaydedildi");
                 onClose();
             }
@@ -95,14 +130,14 @@ export function MembersSettingsSheet({ openTab, onClose, communityName = "WellDo
                         ref={bannerInputRef}
                         className="hidden"
                         accept="image/*"
-                        onChange={(e) => handleFileChange(e, setBannerImage)}
+                        onChange={(e) => handleFileChange(e, setBannerImage, setBannerFile)}
                     />
                     <input
                         type="file"
                         ref={coverInputRef}
                         className="hidden"
                         accept="image/*"
-                        onChange={(e) => handleFileChange(e, setCoverImage)}
+                        onChange={(e) => handleFileChange(e, setCoverImage, setCoverFile)}
                     />
 
                     {isBanner ? (
@@ -125,7 +160,7 @@ export function MembersSettingsSheet({ openTab, onClose, communityName = "WellDo
                                         )}
                                     </div>
                                     <button
-                                        onClick={() => setBannerImage(null)}
+                                        onClick={() => { setBannerImage(null); setBannerFile(null); }}
                                         className="absolute top-2 right-2 p-1 hover:bg-white/20 rounded-full transition-colors"
                                     >
                                         <X className="w-4 h-4 text-white/70" />
@@ -165,7 +200,7 @@ export function MembersSettingsSheet({ openTab, onClose, communityName = "WellDo
                                         <span className="text-sm">Görsel yüklemek için tıklayın</span>
                                     </div>
                                     {bannerImage && (
-                                        <Button variant="outline" size="sm" onClick={() => setBannerImage(null)} className="w-full text-red-600 hover:text-red-700 h-9">
+                                        <Button variant="outline" size="sm" onClick={() => { setBannerImage(null); setBannerFile(null); }} className="w-full text-red-600 hover:text-red-700 h-9">
                                             Görseli Kaldır
                                         </Button>
                                     )}
@@ -209,7 +244,7 @@ export function MembersSettingsSheet({ openTab, onClose, communityName = "WellDo
                                     </div>
                                 </div>
                                 {coverImage && (
-                                    <Button variant="outline" size="sm" onClick={() => setCoverImage(null)} className="w-full text-red-600 hover:text-red-700 h-9">
+                                    <Button variant="outline" size="sm" onClick={() => { setCoverImage(null); setCoverFile(null); }} className="w-full text-red-600 hover:text-red-700 h-9">
                                         Görseli Kaldır
                                     </Button>
                                 )}

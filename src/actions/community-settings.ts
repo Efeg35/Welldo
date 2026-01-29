@@ -65,7 +65,19 @@ export async function getCommunityBanner(communityId: string): Promise<WelcomeBa
         return null;
     }
 
-    return data.welcome_banner as WelcomeBannerSettings;
+    const banner = data.welcome_banner as WelcomeBannerSettings;
+
+    console.log("🔍 Banner data from DB:", banner);
+
+    // Return null if banner doesn't exist or has no valid image
+    // Also reject blob: URLs (temporary browser-only URLs)
+    if (!banner || !banner.image_url || banner.image_url.trim() === '' || banner.image_url.startsWith('blob:')) {
+        console.log("✅ Banner hidden - no valid image");
+        return null;
+    }
+
+    console.log("📸 Banner will be shown with image:", banner.image_url);
+    return banner;
 }
 
 export async function getCoverPhoto(communityId: string): Promise<string | null> {
@@ -82,7 +94,19 @@ export async function getCoverPhoto(communityId: string): Promise<string | null>
         return null;
     }
 
-    return data.cover_photo_url as string | null;
+    const coverUrl = data.cover_photo_url;
+
+    console.log("🔍 Cover photo from DB:", coverUrl);
+
+    // Return null if cover photo doesn't exist, is empty, or is a blob URL
+    // Blob URLs are temporary browser-only URLs that don't work on the server
+    if (!coverUrl || coverUrl.trim() === '' || coverUrl.startsWith('blob:')) {
+        console.log("✅ Cover photo hidden - no valid URL");
+        return null;
+    }
+
+    console.log("📸 Cover photo will be shown:", coverUrl);
+    return coverUrl;
 }
 
 export async function updateCoverPhoto(communityId: string, coverPhotoUrl: string | null) {
