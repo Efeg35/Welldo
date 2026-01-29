@@ -32,44 +32,33 @@ export function PostDetailModal({ post, user, isOpen, onClose }: PostDetailModal
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-w-4xl h-[85vh] p-0 gap-0 overflow-hidden flex flex-col sm:rounded-xl">
+            <DialogContent className="max-w-6xl sm:max-w-6xl h-[85vh] p-0 gap-0 overflow-hidden flex flex-col sm:rounded-xl">
+                <DialogTitle className="sr-only">Gönderi Detayı</DialogTitle>
                 {/* Custom Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-white shrink-0">
-                    <DialogTitle className="text-xl font-bold truncate pr-4">
-                        {post.title || "Gönderi"}
-                    </DialogTitle>
-                    <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" className="text-gray-400 hover:text-gray-600 rounded-full h-8 w-8">
-                            <Bookmark className="w-5 h-5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="text-gray-400 hover:text-gray-600 rounded-full h-8 w-8">
-                            <MoreHorizontal className="w-5 h-5" />
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-gray-400 hover:text-gray-600 rounded-full h-8 w-8"
-                            onClick={handleExpand}
-                        >
-                            <Maximize2 className="w-5 h-5" />
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-gray-400 hover:text-gray-600 rounded-full h-8 w-8 ml-2"
-                            onClick={onClose}
-                        >
-                            <X className="w-5 h-5" />
-                        </Button>
-                    </div>
+                <div className="absolute right-4 top-4 z-50 flex items-center gap-2">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="bg-white/80 backdrop-blur-sm hover:bg-white text-gray-500 hover:text-gray-900 rounded-full h-8 w-8 shadow-sm border border-gray-100/50"
+                        onClick={handleExpand}
+                        title="Tam ekran"
+                    >
+                        <Maximize2 className="w-4 h-4" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="bg-white/80 backdrop-blur-sm hover:bg-white text-gray-500 hover:text-gray-900 rounded-full h-8 w-8 shadow-sm border border-gray-100/50"
+                        onClick={onClose}
+                        title="Kapat"
+                    >
+                        <X className="w-4 h-4" />
+                    </Button>
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 overflow-y-auto bg-gray-50/50">
-                    <div className="px-0 md:px-0 py-0">
-                        {/* We modify styles slightly for modal context if needed, but PostContent is generic */}
-                        <PostContent post={post} user={user} />
-                    </div>
+                <div className="flex-1 min-h-0 bg-white">
+                    <PostContent post={post} user={user} layoutMode="modal" />
                 </div>
             </DialogContent>
         </Dialog>

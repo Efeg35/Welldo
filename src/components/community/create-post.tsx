@@ -208,7 +208,7 @@ export function CreatePost({
                         <div className="flex gap-4 items-center">
                             <Avatar className="w-10 h-10">
                                 <AvatarImage src={user?.avatar_url || undefined} />
-                                <AvatarFallback className="bg-gray-100 text-gray-700 font-semibold">
+                                <AvatarFallback className="bg-zinc-200 text-zinc-700 font-bold">
                                     {getInitials(user?.full_name || user?.user_metadata?.full_name || user?.email || undefined)}
                                 </AvatarFallback>
                             </Avatar>

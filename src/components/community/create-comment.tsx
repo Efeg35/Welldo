@@ -39,7 +39,7 @@ export function CreateComment({ postId, eventId, user }: CreateCommentProps) {
         <div className="flex gap-4 items-start">
             <Avatar className="w-8 h-8">
                 <AvatarImage src={user?.avatar_url || undefined} />
-                <AvatarFallback className="bg-gray-100 text-gray-700 font-semibold text-xs">
+                <AvatarFallback className="bg-zinc-200 text-zinc-700 font-bold text-xs">
                     {getInitials(user?.full_name || user?.user_metadata?.full_name || user?.email || undefined)}
                 </AvatarFallback>
             </Avatar>

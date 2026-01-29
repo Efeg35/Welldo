@@ -17,7 +17,7 @@ export function CommentList({ comments }: CommentListProps) {
                 <div key={comment.id} className="flex gap-3 group">
                     <Avatar className="w-8 h-8 mt-1">
                         <AvatarImage src={comment.profiles?.avatar_url || undefined} />
-                        <AvatarFallback className="bg-gray-100/50 text-gray-600 font-semibold text-xs">
+                        <AvatarFallback className="bg-zinc-200 text-zinc-700 font-bold text-xs">
                             {getInitials(comment.profiles?.full_name || comment.profiles?.email || "U")}
                         </AvatarFallback>
                     </Avatar>

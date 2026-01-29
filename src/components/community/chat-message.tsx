@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Message, Profile } from "@/types";
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
-import { cn } from "@/lib/utils";
+import { cn, getInitials } from "@/lib/utils";
 import { Image as ImageIcon, FileText, Paperclip } from "lucide-react";
 
 interface ChatMessageProps {
@@ -38,8 +38,8 @@ export function ChatMessage({ message, isContinuous = false, currentUser }: Chat
             <div className="w-10 flex-shrink-0">
                 {!isContinuous && (
                     <Avatar className="w-10 h-10 cursor-pointer hover:opacity-90 transition-opacity">
-                        <AvatarImage src={user?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.id}`} />
-                        <AvatarFallback>{userName.charAt(0)}</AvatarFallback>
+                        <AvatarImage src={user?.avatar_url || undefined} />
+                        <AvatarFallback className="bg-zinc-200 text-zinc-700 font-bold text-xs">{getInitials(userName)}</AvatarFallback>
                     </Avatar>
                 )}
                 {isContinuous && (

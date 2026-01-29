@@ -64,8 +64,26 @@ export async function getPosts(channelId?: string, sort: string = 'latest', topi
         return [];
     }
 
+    const { data: { user } } = await supabase.auth.getUser();
+
+    // Fetch user's follows
+    let followedPostIds = new Set();
+    if (user) {
+        const { data: follows } = await supabase
+            .from('post_followers')
+            .select('post_id')
+            .eq('user_id', user.id);
+        if (follows) {
+            followedPostIds = new Set(follows.map(f => f.post_id));
+        }
+    }
+
     let posts = data.map((post: any) => ({
         ...post,
+        settings: {
+            ...(post.settings || {}),
+            is_following: followedPostIds.has(post.id)
+        },
         _count: {
             likes: post.likes?.length || 0,
             comments: post.comments?.[0]?.count || 0
@@ -476,7 +494,7 @@ export async function markChannelAsRead(channelId: string) {
     }
 }
 
-export async function createComment(resourceId: string, content: string, type: 'post' | 'event' = 'post') {
+export async function createComment(resourceId: string, content: string, type: 'post' | 'event' = 'post', parentId?: string) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -487,6 +505,7 @@ export async function createComment(resourceId: string, content: string, type: '
     const payload: any = {
         user_id: user.id,
         content,
+        parent_id: parentId || null
     };
 
     if (type === 'post') {
@@ -554,7 +573,8 @@ export async function getComments(resourceId: string, type: 'post' | 'event' = '
                 avatar_url,
                 role,
                 email
-            )
+            ),
+            likes (user_id)
         `);
 
     if (type === 'post') {
@@ -570,7 +590,46 @@ export async function getComments(resourceId: string, type: 'post' | 'event' = '
         return [];
     }
 
-    return data;
+    return data.map((comment: any) => ({
+        ...comment,
+        _count: {
+            likes: comment.likes?.length || 0
+        },
+        likes: comment.likes || []
+    }));
+}
+
+export async function toggleCommentLike(commentId: string) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+        throw new Error("Unauthorized");
+    }
+
+    const { data: existingLike } = await supabase
+        .from('likes')
+        .select()
+        .eq('comment_id', commentId)
+        .eq('user_id', user.id)
+        .single();
+
+    if (existingLike) {
+        await supabase
+            .from('likes')
+            .delete()
+            .eq('comment_id', commentId)
+            .eq('user_id', user.id);
+    } else {
+        await supabase
+            .from('likes')
+            .insert({
+                user_id: user.id,
+                comment_id: commentId
+            });
+    }
+
+    revalidatePath('/community');
 }
 
 interface CreateChannelParams {
@@ -1340,9 +1399,11 @@ export async function duplicatePost(postId: string) {
             id: undefined, // Let DB generate new ID
             created_at: undefined,
             updated_at: undefined,
-            title: original.title ? `${original.title} (Copy)` : undefined,
+            title: original.title ? `${original.title} (Kopya)` : undefined,
             content: original.content, // Content is same
-            user_id: user.id
+            user_id: user.id,
+            is_pinned: false, // Reset pin
+            settings: {} // Reset settings
         });
 
     if (error) throw error;
@@ -1364,10 +1425,7 @@ export async function updatePostSettings(postId: string, settings: {
     if (settings.is_pinned !== undefined) updates.is_pinned = settings.is_pinned;
 
     // For json settings, we need to fetch existing or merge.
-    // Assuming 'settings' column exists for these:
     if (settings.hide_likes !== undefined || settings.hide_comments !== undefined || settings.comments_closed !== undefined) {
-        // This assumes a 'settings' jsonb column. If it fails, user needs to add it.
-        // We can also fetch current settings to merge.
         const { data: current } = await supabase.from('posts').select('settings').eq('id', postId).single();
         const currentSettings = current?.settings || {};
         updates.settings = { ...currentSettings, ...settings };
@@ -1389,48 +1447,38 @@ export async function reportPost(postId: string, reason: string) {
     return true;
 }
 
+
+
 export async function followPost(postId: string) {
-    // Mock implementation - in reality insert to post_followers table
-    await new Promise(r => setTimeout(r, 300));
-    return true;
-}
-export async function toggleCommentLike(commentId: string) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) throw new Error("Unauthorized");
 
-    // Check if like exists
-    // Assuming a polymorphic 'likes' table with 'comment_id' column or a separate 'comment_likes' table.
-    // Based on `toggleLike` implementation, it seems 'likes' table has resource specific columns.
-    // Let's assume 'likes' table has 'comment_id' column for simplicity, or we check if we need to add it.
-    // Ideally we should check migration but for now let's assume standard pattern or use a separate table if standard.
-    // Actually, migration history doesn't explicitly show 'likes' table structure fully but 'toggleLike' uses 'post_id'/'event_id'.
-    // Let's assume we need to add 'comment_id' to 'likes' table or use a new table.
-    // SAFEST: distinct 'comment_likes' table or 'likes' with 'comment_id'.
-    // Given previous patterns, I'll assume 'likes' table can be extended or already has it.
-    // Wait, I should probably check if 'likes' table has 'comment_id'.
-    // Use 'comment_likes' table approach for safety if I can't verify 'likes' schema fully efficiently?
-    // Let's try to query 'likes' with 'comment_id'. If it fails, I'll catch and create table? No, too risky.
-    // Let's create 'comment_likes' table via migration? Or just add column.
-    // ACTUALLY: Let's use a simpler approach for MVP: Toggle like on 'likes' table assuming 'comment_id' column exists.
-    // I will add a migration script to ensure 'comment_id' exists on 'likes' table.
-
-    const { data: existingLike } = await supabase
-        .from('likes')
+    const { data: existing } = await supabase
+        .from('post_followers')
         .select()
-        .eq('comment_id', commentId)
+        .eq('post_id', postId)
         .eq('user_id', user.id)
         .single();
 
-    if (existingLike) {
-        await supabase.from('likes').delete().eq('comment_id', commentId).eq('user_id', user.id);
+    if (existing) {
+        // Unfollow
+        await supabase
+            .from('post_followers')
+            .delete()
+            .eq('post_id', postId)
+            .eq('user_id', user.id);
+        return false; // Not following anymore
     } else {
-        await supabase.from('likes').insert({ comment_id: commentId, user_id: user.id });
+        // Follow
+        await supabase
+            .from('post_followers')
+            .insert({ post_id: postId, user_id: user.id });
+        return true; // Now following
     }
-
-    revalidatePath('/community'); // Broad revalidate for now
 }
+
 
 export async function deleteComment(commentId: string) {
     const supabase = await createClient();
@@ -1455,14 +1503,46 @@ export async function deleteComment(commentId: string) {
 }
 
 export async function toggleCommentBookmark(commentId: string) {
-    // Similar to post bookmark
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser(); // ... implementation
-    // For now mocking as success or implement if table supports it.
-    // 'bookmarks' table has 'post_id' and 'event_id'. Adding 'comment_id' requires migration.
-    // I will add migration for this too.
+    const { data: { user } } = await supabase.auth.getUser();
 
-    // For now, let's just log and return true to not crash, effectively a "todo" until migration runs.
-    console.log("Toggle bookmark for comment", commentId);
-    // Real implementation requires DB change.
+    if (!user) throw new Error("Unauthorized");
+
+    const { data: existing } = await supabase
+        .from('bookmarks')
+        .select()
+        .eq('comment_id', commentId)
+        .eq('user_id', user.id)
+        .single();
+
+    if (existing) {
+        await supabase.from('bookmarks').delete().eq('comment_id', commentId).eq('user_id', user.id);
+    } else {
+        await supabase.from('bookmarks').insert({ comment_id: commentId, user_id: user.id });
+    }
+
+    revalidatePath('/community');
+}
+
+export async function editComment(commentId: string, content: string) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) throw new Error("Unauthorized");
+
+    const { data: comment } = await supabase.from('comments').select('user_id').eq('id', commentId).single();
+    if (!comment) throw new Error("Comment not found");
+
+    if (comment.user_id !== user.id) {
+        throw new Error("Unauthorized");
+    }
+
+    const { error } = await supabase
+        .from('comments')
+        .update({ content, updated_at: new Date().toISOString() })
+        .eq('id', commentId);
+
+    if (error) throw error;
+
+    revalidatePath('/community');
 }

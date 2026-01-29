@@ -29,6 +29,7 @@ interface PostCardProps {
     post: Post;
     currentUserId: string | undefined;
     onClick?: (post: Post) => void;
+    isAdmin?: boolean;
 }
 
 // Helper to extract YouTube ID
@@ -38,7 +39,7 @@ function getYoutubeId(url: string) {
     return (match && match[2].length === 11) ? match[2] : null;
 }
 
-export function PostCard({ post, currentUserId, onClick }: PostCardProps) {
+export function PostCard({ post, currentUserId, onClick, isAdmin }: PostCardProps) {
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
@@ -123,7 +124,7 @@ export function PostCard({ post, currentUserId, onClick }: PostCardProps) {
                 <div className="flex items-center gap-3">
                     <Avatar className="w-10 h-10">
                         <AvatarImage src={(post.profiles?.avatar_url as string) || undefined} />
-                        <AvatarFallback className="bg-gray-100/50 text-gray-600 font-semibold text-sm">
+                        <AvatarFallback className="bg-zinc-200 text-zinc-700 font-bold text-sm">
                             {getInitials(post.profiles?.full_name || post.profiles?.email || "U")}
                         </AvatarFallback>
                     </Avatar>
@@ -161,6 +162,13 @@ export function PostCard({ post, currentUserId, onClick }: PostCardProps) {
                                 {formatDistanceToNow(new Date(post.created_at), { addSuffix: true, locale: tr })}
                             </span>
                         </div>
+                        {post.is_pinned && (
+                            <div className="mt-1">
+                                <span className="bg-indigo-50 text-indigo-700 text-[10px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center w-fit">
+                                    Sabitlendi
+                                </span>
+                            </div>
+                        )}
                     </div>
                 </div>
                 <div className="flex items-center gap-1">
@@ -176,7 +184,7 @@ export function PostCard({ post, currentUserId, onClick }: PostCardProps) {
                         post={post}
                         currentUserId={currentUserId}
                         isOwner={canManage}
-                        isAdmin={post.profiles?.role === 'admin'} // Simplified admin check
+                        isAdmin={isAdmin}
                     />
                 </div>
             </div>
@@ -225,16 +233,18 @@ export function PostCard({ post, currentUserId, onClick }: PostCardProps) {
                     )}
                 >
                     <ThumbsUp className={cn("w-4 h-4", optimisticState.hasLiked && "fill-current")} />
-                    <span className="text-sm">{optimisticState.likeCount}</span>
+                    {!post.settings?.hide_likes && <span className="text-sm">{optimisticState.likeCount}</span>}
                 </button>
-                <Link href={`/community/post/${post.id}`} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
-                    <MessageCircle className="w-4 h-4" />
-                    <span className="text-sm">
-                        {post._count?.comments !== undefined
-                            ? post._count.comments
-                            : (post.comments?.[0]?.count ?? post.comments?.length ?? 0)}
-                    </span>
-                </Link>
+                {!post.settings?.hide_comments && (
+                    <Link href={`/community/post/${post.id}`} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
+                        <MessageCircle className="w-4 h-4" />
+                        <span className="text-sm">
+                            {post._count?.comments !== undefined
+                                ? post._count.comments
+                                : (post.comments?.[0]?.count ?? post.comments?.length ?? 0)}
+                        </span>
+                    </Link>
+                )}
                 <button
                     onClick={handleBookmark}
                     className={cn(

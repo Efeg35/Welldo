@@ -241,6 +241,7 @@ export function PostFeed({ channel, user, posts, communityId, channels = [], mem
                                         key={post.id}
                                         post={post}
                                         currentUserId={user?.id}
+                                        isAdmin={isInstructor}
                                         onClick={(p) => {
                                             setSelectedPost(p);
                                             setIsPostDetailOpen(true);
