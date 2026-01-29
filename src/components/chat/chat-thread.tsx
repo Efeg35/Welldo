@@ -64,7 +64,7 @@ export function ChatThread({ conversationId, messages, otherUser, currentUser }:
                                         {msg.created_at ? format(new Date(msg.created_at), 'HH:mm', { locale: tr }) : ''}
                                     </span>
                                 </div>
-                                <div className={`inline-block text-sm mt-1 p-3 rounded-lg text-left ${isMe ? 'bg-[#408FED] text-white rounded-br-none' : 'bg-muted rounded-bl-none'}`}>
+                                <div className={`inline-block text-sm mt-1 p-3 rounded-lg text-left ${isMe ? 'bg-gray-900 text-white rounded-br-none' : 'bg-muted rounded-bl-none'}`}>
                                     {msg.content}
                                 </div>
                             </div>
@@ -95,7 +95,7 @@ export function ChatThread({ conversationId, messages, otherUser, currentUser }:
                         size="icon"
                         onClick={handleSend}
                         disabled={isPending || !input.trim()}
-                        className="rounded-full bg-[#408FED] hover:bg-[#408FED]/90"
+                        className="rounded-full bg-gray-900 hover:bg-gray-800"
                     >
                         <Send className="w-4 h-4" />
                     </Button>

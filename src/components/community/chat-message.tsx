@@ -17,6 +17,9 @@ export function ChatMessage({ message, isContinuous = false, currentUser }: Chat
     // Robustly find user profile from either 'user' or 'profiles' join
     let user = message.user || (message as any).profiles;
 
+    // Determine if this message is from the current user
+    const isOwnMessage = currentUser && message.user_id === currentUser.id;
+
     // Fallback to currentUser if IDs match and joined profile is incomplete
     if (currentUser && message.user_id === currentUser.id) {
         user = {
@@ -32,6 +35,84 @@ export function ChatMessage({ message, isContinuous = false, currentUser }: Chat
     const userName = user?.full_name || "Bilinmeyen Kullanıcı";
     const userRole = user?.role === 'admin' ? 'Yönetici' : user?.role === 'instructor' ? 'Eğitmen' : '';
 
+    // For own messages: align right, different styling
+    if (isOwnMessage) {
+        return (
+            <div className={cn("group flex gap-3 px-4 py-1 justify-end", isContinuous ? "pt-0.5 pb-0.5" : "mt-2 pt-2")}>
+                {/* Content Column - comes first for right alignment */}
+                <div className="flex-1 min-w-0 flex flex-col items-end max-w-[70%]">
+                    {!isContinuous && (
+                        <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs text-muted-foreground">
+                                {format(new Date(message.created_at), 'hh:mm a')}
+                            </span>
+                            <span className="font-semibold text-[15px] text-gray-900">
+                                Sen
+                            </span>
+                        </div>
+                    )}
+
+                    <div className={cn(
+                        "text-[15px] leading-relaxed whitespace-pre-wrap break-words rounded-2xl px-4 py-2",
+                        "bg-gray-900 text-white rounded-br-sm"
+                    )}>
+                        {message.content}
+                    </div>
+
+                    {/* Attachments */}
+                    {message.attachments && Array.isArray(message.attachments) && message.attachments.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-2 justify-end">
+                            {message.attachments.map((att: any, i: number) => (
+                                <div key={i} className="group relative">
+                                    {att.type.startsWith('image/') ? (
+                                        <a href={att.url} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-lg border border-border bg-muted/40 max-w-[300px]">
+                                            <img
+                                                src={att.url}
+                                                alt={att.name}
+                                                className="max-h-[300px] w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                            />
+                                        </a>
+                                    ) : (
+                                        <a
+                                            href={att.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex items-center gap-3 rounded-lg border border-border bg-gray-50 p-3 transition-colors hover:bg-gray-100 max-w-sm"
+                                        >
+                                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
+                                                <Paperclip className="h-5 w-5" />
+                                            </div>
+                                            <div className="flex-1 overflow-hidden">
+                                                <p className="truncate text-sm font-medium text-foreground">{att.name}</p>
+                                                <p className="text-xs text-muted-foreground">{Math.round(att.size / 1024)} KB</p>
+                                            </div>
+                                        </a>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Avatar Column - hidden for own messages to save space */}
+                <div className="w-10 flex-shrink-0">
+                    {!isContinuous && (
+                        <Avatar className="w-10 h-10 cursor-pointer hover:opacity-90 transition-opacity">
+                            <AvatarImage src={user?.avatar_url || undefined} />
+                            <AvatarFallback className="bg-gray-200 text-gray-700 font-bold text-xs">{getInitials(userName)}</AvatarFallback>
+                        </Avatar>
+                    )}
+                    {isContinuous && (
+                        <div className="w-10 h-full opacity-0 group-hover:opacity-100 text-[10px] text-muted-foreground flex items-center justify-center">
+                            {format(new Date(message.created_at), 'HH:mm')}
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
+    // For others' messages: keep left alignment
     return (
         <div className={cn("group flex gap-4 px-4 py-1 hover:bg-gray-50/50 transition-colors", isContinuous ? "pt-0.5 pb-0.5" : "mt-2 pt-2")}>
             {/* Avatar Column */}
@@ -51,7 +132,7 @@ export function ChatMessage({ message, isContinuous = false, currentUser }: Chat
             </div>
 
             {/* Content Column */}
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 max-w-[70%]">
                 {!isContinuous && (
                     <div className="flex items-center gap-2 mb-1">
                         <span className="font-semibold text-[15px] text-gray-900 cursor-pointer hover:underline">
@@ -68,7 +149,10 @@ export function ChatMessage({ message, isContinuous = false, currentUser }: Chat
                     </div>
                 )}
 
-                <div className="text-[15px] text-gray-800 leading-relaxed whitespace-pre-wrap break-words">
+                <div className={cn(
+                    "text-[15px] leading-relaxed whitespace-pre-wrap break-words rounded-2xl px-4 py-2",
+                    "bg-gray-100 text-gray-900 rounded-bl-sm"
+                )}>
                     {message.content}
                 </div>
 
