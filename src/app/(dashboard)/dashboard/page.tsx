@@ -1,9 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getUnifiedFeed, getSidebarData, getUpcomingEventsForSidebar, getTrendingPosts } from "@/actions/community";
-import { getCommunityBanner } from "@/actions/community-settings";
+import { getCommunityBanner, getCoverPhoto } from "@/actions/community-settings";
 import { DashboardClient } from "./dashboard-client";
 
+// Main Dashboard Page Component
 export default async function DashboardPage({ searchParams }: { searchParams: { sort?: string } }) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -42,12 +43,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     }
 
     // Fetch all data in parallel
-    const [feedItems, { spaces }, upcomingEvents, trendingPosts, bannerSettings] = await Promise.all([
+    const [feedItems, { spaces }, upcomingEvents, trendingPosts, bannerSettings, coverPhotoUrl] = await Promise.all([
         getUnifiedFeed(communityId, 30),
         getSidebarData(communityId),
         getUpcomingEventsForSidebar(communityId, 5),
         getTrendingPosts(communityId, 3),
-        getCommunityBanner(communityId)
+        getCommunityBanner(communityId),
+        getCoverPhoto(communityId)
     ]);
 
     const availableChannels = spaces;
@@ -62,6 +64,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
             upcomingEvents={upcomingEvents}
             trendingPosts={trendingPosts}
             bannerSettings={bannerSettings}
+            coverPhotoUrl={coverPhotoUrl}
         />
     );
 }

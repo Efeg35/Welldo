@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Image, Upload, X, Loader2 } from "lucide-react";
-import { updateCommunityBanner, WelcomeBannerSettings } from "@/actions/community-settings";
+import { updateCommunityBanner, WelcomeBannerSettings, updateCoverPhoto } from "@/actions/community-settings";
 import { toast } from "sonner";
 
 type SettingsTab = "banner" | "cover" | null;
@@ -63,18 +63,11 @@ export function MembersSettingsSheet({ openTab, onClose, communityName = "WellDo
                     button_text: "Etkinlikleri Gör"
                 };
                 await updateCommunityBanner(communityId, settings);
-                toast.success("Ayarlar başarıyla kaydedildi");
+                toast.success("Hoşgeldin panosu kaydedildi");
                 onClose();
             } else {
-                // Cover photo updates the banner's background image
-                const settings: WelcomeBannerSettings = {
-                    title: bannerTitle,
-                    description: bannerDescription,
-                    image_url: coverImage,
-                    show_button: showCta,
-                    button_text: "Etkinlikleri Gör"
-                };
-                await updateCommunityBanner(communityId, settings);
+                // Cover photo is saved separately
+                await updateCoverPhoto(communityId, coverImage);
                 toast.success("Kapak fotoğrafı kaydedildi");
                 onClose();
             }

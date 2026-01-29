@@ -9,7 +9,8 @@ import { FeedEventCard } from "@/components/community/feed-event-card";
 import { QuickShareBox } from "@/components/community/quick-share-box";
 import { FeedSidebar } from "@/components/community/feed-sidebar";
 import { FeedFilter } from "@/components/community/feed-filter";
-import { WelcomeBanner } from "@/components/community/feed-hero-banner";
+import { CoverPhoto } from "@/components/community/cover-photo";
+import { WelcomeBannerCard } from "@/components/community/welcome-banner-card";
 import { MembersSettingsSheet } from "@/components/members/members-settings-sheet";
 import {
     DropdownMenu,
@@ -27,6 +28,7 @@ interface DashboardClientProps {
     upcomingEvents: any[];
     trendingPosts: any[];
     bannerSettings: any;
+    coverPhotoUrl: string | null;
 }
 
 export function DashboardClient({
@@ -37,7 +39,8 @@ export function DashboardClient({
     availableChannels,
     upcomingEvents,
     trendingPosts,
-    bannerSettings
+    bannerSettings,
+    coverPhotoUrl
 }: DashboardClientProps) {
     const [settingsTab, setSettingsTab] = useState<"banner" | "cover" | null>(null);
 
@@ -78,14 +81,21 @@ export function DashboardClient({
                 </div>
             </div>
 
+            {/* Cover Photo - Full Width below Header */}
+            {coverPhotoUrl && (
+                <div className="max-w-7xl mx-auto px-4 md:px-8 pt-6">
+                    <CoverPhoto imageUrl={coverPhotoUrl} />
+                </div>
+            )}
+
             {/* Two Column Layout */}
             <div className="max-w-7xl mx-auto px-4 md:px-8 py-6">
-                {/* Welcome Banner - Full Width */}
-                <WelcomeBanner settings={bannerSettings} />
-
                 <div className="flex gap-8">
                     {/* Left Column - Feed (70%) */}
                     <div className="flex-1 min-w-0">
+                        {/* Welcome Banner Card - Like a post */}
+                        <WelcomeBannerCard settings={bannerSettings} />
+
                         {/* Quick Share Box */}
                         <div className="mb-6">
                             <QuickShareBox user={user} communityId={communityId} channels={availableChannels} />

@@ -67,3 +67,55 @@ export async function getCommunityBanner(communityId: string): Promise<WelcomeBa
 
     return data.welcome_banner as WelcomeBannerSettings;
 }
+
+export async function getCoverPhoto(communityId: string): Promise<string | null> {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+        .from("communities")
+        .select("cover_photo_url")
+        .eq("id", communityId)
+        .single();
+
+    if (error) {
+        console.error("Error fetching cover photo:", error);
+        return null;
+    }
+
+    return data.cover_photo_url as string | null;
+}
+
+export async function updateCoverPhoto(communityId: string, coverPhotoUrl: string | null) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+        throw new Error("Unauthorized");
+    }
+
+    // Verify ownership
+    const { data: community } = await supabase
+        .from("communities")
+        .select("owner_id")
+        .eq("id", communityId)
+        .single();
+
+    if (!community) throw new Error("Community not found");
+
+    if (community.owner_id !== user.id) {
+        throw new Error("Unauthorized to update settings");
+    }
+
+    const { error } = await supabase
+        .from("communities")
+        .update({ cover_photo_url: coverPhotoUrl })
+        .eq("id", communityId);
+
+    if (error) {
+        console.error("Error updating cover photo:", error);
+        throw new Error("Failed to update cover photo");
+    }
+
+    revalidatePath("/dashboard");
+    revalidatePath("/feed");
+}
