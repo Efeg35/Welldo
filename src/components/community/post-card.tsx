@@ -123,20 +123,22 @@ export function PostCard({ post, currentUserId, onClick }: PostCardProps) {
                 <div className="flex items-center gap-3">
                     <Avatar className="w-10 h-10">
                         <AvatarImage src={(post.profiles?.avatar_url as string) || undefined} />
-                        <AvatarFallback className="bg-gray-100 text-gray-700 font-semibold text-sm">
-                            {getInitials(post.profiles?.full_name as string)}
+                        <AvatarFallback className="bg-gray-100/50 text-gray-600 font-semibold text-sm">
+                            {getInitials(post.profiles?.full_name || post.profiles?.email || "U")}
                         </AvatarFallback>
                     </Avatar>
                     <div>
                         <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-medium">{post.profiles?.full_name}</span>
+                            <span className="font-medium text-gray-900">
+                                {post.profiles?.full_name || (post.profiles?.email ? post.profiles.email.split('@')[0] : "İsimsiz Üye")}
+                            </span>
                             {post.profiles?.role === 'instructor' && (
-                                <span className="text-[10px] bg-gray-900 text-white font-bold px-1.5 py-0.5 rounded-full uppercase">
+                                <span className="text-[10px] bg-blue-600 text-white font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider">
                                     Eğitmen
                                 </span>
                             )}
                             {post.profiles?.role === 'admin' && (
-                                <span className="text-[10px] bg-gray-700 text-white font-bold px-1.5 py-0.5 rounded-full uppercase">
+                                <span className="text-[10px] bg-purple-600 text-white font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider">
                                     Admin
                                 </span>
                             )}

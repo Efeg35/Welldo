@@ -15,7 +15,8 @@ export async function getPosts(channelId?: string, sort: string = 'latest', topi
                 id,
                 full_name,
                 avatar_url,
-                role
+                role,
+                email
             ),
             likes (
                 user_id
@@ -503,7 +504,8 @@ export async function createComment(resourceId: string, content: string, type: '
                 id,
                 full_name,
                 avatar_url,
-                role
+                role,
+                email
             )
         `)
         .single();
@@ -550,7 +552,8 @@ export async function getComments(resourceId: string, type: 'post' | 'event' = '
                 id,
                 full_name,
                 avatar_url,
-                role
+                role,
+                email
             )
         `);
 
@@ -1126,7 +1129,8 @@ export async function getUnifiedFeed(communityId?: string, limit: number = 30) {
                 id,
                 full_name,
                 avatar_url,
-                role
+                role,
+                email
             ),
             channel:channels (
                 id,
@@ -1280,7 +1284,8 @@ export async function getTrendingPosts(communityId?: string, limit: number = 3) 
             profiles:profiles!posts_user_id_fkey (
                 id,
                 full_name,
-                avatar_url
+                avatar_url,
+                email
             ),
             comments (count)
         `)

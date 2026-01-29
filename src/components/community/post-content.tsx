@@ -94,13 +94,15 @@ export function PostContent({ post: initialPost, user }: PostContentProps) {
                     <div className="flex items-center gap-4">
                         <Avatar className="w-12 h-12">
                             <AvatarImage src={post.profiles?.avatar_url || ""} />
-                            <AvatarFallback className="bg-gray-100 text-gray-700 font-semibold">
-                                {getInitials(post.profiles?.full_name as string)}
+                            <AvatarFallback className="bg-gray-100/50 text-gray-600 font-semibold">
+                                {getInitials(post.profiles?.full_name || post.profiles?.email || "U")}
                             </AvatarFallback>
                         </Avatar>
                         <div>
                             <div className="flex items-center gap-2">
-                                <h2 className="font-bold text-lg leading-none">{post.profiles?.full_name}</h2>
+                                <h2 className="font-bold text-lg leading-none">
+                                    {post.profiles?.full_name || (post.profiles?.email ? post.profiles.email.split('@')[0] : "İsimsiz Üye")}
+                                </h2>
                                 {post.profiles?.role === 'instructor' && (
                                     <span className="bg-gray-900 text-white text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Eğitmen</span>
                                 )}
@@ -160,14 +162,16 @@ export function PostContent({ post: initialPost, user }: PostContentProps) {
                         <div key={c.id} className="flex gap-4 group animate-in fade-in slide-in-from-bottom-2 duration-300">
                             <Avatar className="w-10 h-10 shrink-0 border border-gray-100">
                                 <AvatarImage src={c.profiles?.avatar_url} />
-                                <AvatarFallback className="bg-white text-gray-700 font-semibold text-sm">
-                                    {getInitials(c.profiles?.full_name as string)}
+                                <AvatarFallback className="bg-white text-gray-600 font-semibold text-sm">
+                                    {getInitials(c.profiles?.full_name || c.profiles?.email || "U")}
                                 </AvatarFallback>
                             </Avatar>
                             <div className="flex-1 space-y-1.5 min-w-0">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
-                                        <span className="font-semibold text-sm text-gray-900">{c.profiles?.full_name}</span>
+                                        <span className="font-semibold text-sm text-gray-900">
+                                            {c.profiles?.full_name || (c.profiles?.email ? c.profiles.email.split('@')[0] : "İsimsiz Üye")}
+                                        </span>
                                         {c.profiles?.role === 'instructor' && (
                                             <span className="bg-indigo-100 text-indigo-700 text-[10px] px-1.5 py-0.5 rounded-full font-bold uppercase">Eğitmen</span>
                                         )}
@@ -235,7 +239,7 @@ export function PostContent({ post: initialPost, user }: PostContentProps) {
                     <Avatar className="w-10 h-10 shrink-0 border border-gray-100">
                         <AvatarImage src={user.avatar_url || ""} />
                         <AvatarFallback className="bg-white text-gray-700 font-semibold text-sm">
-                            {getInitials(user.full_name as string)}
+                            {getInitials(user.full_name || user.email || "U")}
                         </AvatarFallback>
                     </Avatar>
                     <div className="flex-1">

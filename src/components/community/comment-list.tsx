@@ -16,14 +16,16 @@ export function CommentList({ comments }: CommentListProps) {
             {comments.map((comment) => (
                 <div key={comment.id} className="flex gap-3 group">
                     <Avatar className="w-8 h-8 mt-1">
-                        <AvatarImage src={comment.profiles.avatar_url || undefined} />
-                        <AvatarFallback className="bg-gray-100 text-gray-700 font-semibold text-xs">
-                            {getInitials(comment.profiles.full_name || undefined)}
+                        <AvatarImage src={comment.profiles?.avatar_url || undefined} />
+                        <AvatarFallback className="bg-gray-100/50 text-gray-600 font-semibold text-xs">
+                            {getInitials(comment.profiles?.full_name || comment.profiles?.email || "U")}
                         </AvatarFallback>
                     </Avatar>
                     <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                            <span className="font-semibold text-sm">{comment.profiles.full_name}</span>
+                            <span className="font-semibold text-sm text-gray-900">
+                                {comment.profiles?.full_name || (comment.profiles?.email ? comment.profiles.email.split('@')[0] : "İsimsiz Üye")}
+                            </span>
 
                             {/* Optional: Add Admin/Host Badge if role available - skipping specific logic for now, using placeholder logic if relevant 
                                 For now just simple text fidelity matches cleanly. 
